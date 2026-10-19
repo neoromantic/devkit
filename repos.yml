@@ -56,7 +56,7 @@ profiles:
 repos:
   telegram-sync-cli:
     profile: bun
-    description: Telegram CLI - Command-line interface for Telegram with multi-account support
+    description: Agent-friendly Telegram CLI with a local cache, a read-only sync daemon and full MTProto API access.
     topics: [telegram, cli, bun, mtproto, sqlite, sergeybaus-oss]
 
   telesec:
