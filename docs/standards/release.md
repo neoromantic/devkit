@@ -48,3 +48,35 @@
 1. Check the release page, the registry (`npm view <pkg> version`) and a clean install.
 2. The maintainer updates the website and announcements for minor and major releases. Patch
    releases are not announced.
+
+## Releasing devkit itself
+
+devkit is released by hand. Consumers pin `@v1`, so moving that tag is the release, and only a
+repo admin can do it: a tag ruleset on `refs/tags/v*` blocks updating or deleting release tags
+for everyone else, and a branch ruleset blocks force-pushing or deleting `main`. Automating the
+move would need a ruleset bypass for GitHub Actions, which would let any workflow with
+`contents: write` repoint every consumer, so there is no release workflow on purpose.
+
+1. Check that `main` is green: `gh run list --workflow self.yml --branch main --limit 1`.
+2. Bump `version` in `package.json` to `X.Y.Z` and update the README if inputs changed. Commit
+   `chore(release): X.Y.Z` and push.
+3. Tag and publish the release:
+
+   ```sh
+   git tag -a vX.Y.Z -m "devkit vX.Y.Z"
+   git push origin vX.Y.Z
+   gh release create vX.Y.Z --verify-tag --generate-notes --title "devkit vX.Y.Z"
+   ```
+
+4. Move the major tag (admin only; the push reports a bypassed rule, which is expected):
+
+   ```sh
+   git tag -f v1 'vX.Y.Z^{commit}'
+   git push --force origin refs/tags/v1
+   ```
+
+5. Verify: `git ls-remote origin 'refs/tags/v1*'` shows `v1` on the new commit. Renovate updates
+   pinned digests in consuming repos, and lefthook remotes refetch within 24 hours.
+
+Breaking changes to workflow inputs, hook behaviour or template layout start `v2` instead of
+moving `v1`. Never delete a published `vX.Y.Z` tag.

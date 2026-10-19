@@ -126,6 +126,9 @@ the future are skipped.
   it to a digest. Breaking changes to workflow inputs, hook behaviour or template layout go
   to `v2`.
 - `v1.0.0`, `v1.1.0`, … are fixed tags.
+- Only a repo admin can move or delete a `v*` tag, and `main` can't be force-pushed or deleted
+  (repository rulesets). The release steps are in
+  [docs/standards/release.md](docs/standards/release.md#releasing-devkit-itself).
 
 ## Develop
 
