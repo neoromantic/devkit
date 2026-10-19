@@ -1,0 +1,3 @@
+# devkit's own hooks: the shared config straight from this checkout.
+extends:
+  - lefthook/lefthook.yml

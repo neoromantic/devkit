@@ -1,0 +1,10 @@
+# managed by devkit v1: shared git hooks, pulled into each repo through lefthook `remotes`.
+# Needs gitleaks and Bun on PATH. Private markers: ~/.config/devkit/private-markers (mode 0600).
+pre-commit:
+  parallel: true
+  commands:
+    gitleaks:
+      run: gitleaks git --pre-commit --staged --redact --no-banner --verbose
+  scripts:
+    "privacy-scan.ts":
+      runner: bun
