@@ -1,0 +1,57 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "devkit default: weekly, grouped, 3-day release age, automerge only for low-risk updates",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "UTC",
+  "schedule": ["before 6am on monday"],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "rangeStrategy": "auto",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "packageRules": [
+    {
+      "description": "All non-major runtime updates in one PR",
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchDepTypes": ["dependencies", "peerDependencies", "optionalDependencies", "project.dependencies", "require"],
+      "groupName": "non-major dependencies",
+      "groupSlug": "non-major"
+    },
+    {
+      "description": "Dev tooling: one PR, merged when CI is green",
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchDepTypes": ["devDependencies", "dependency-groups", "tool.uv.dev-dependencies"],
+      "groupName": "dev dependencies (non-major)",
+      "groupSlug": "dev-non-major",
+      "automerge": true
+    },
+    {
+      "description": "GitHub Actions: pins and digests merge themselves",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest", "pinDigest"],
+      "groupName": "github actions",
+      "groupSlug": "github-actions",
+      "automerge": true
+    },
+    {
+      "description": "devkit itself (reusable workflows and the npm package)",
+      "matchDepNames": ["neoromantic/devkit", "@goodit/devkit"],
+      "groupName": "devkit",
+      "groupSlug": "devkit",
+      "automerge": true
+    },
+    {
+      "description": "0.x packages can break in a minor: never automerge them",
+      "matchCurrentVersion": "/^v?0\\./",
+      "automerge": false
+    }
+  ]
+}

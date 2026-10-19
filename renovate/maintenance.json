@@ -1,0 +1,12 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "devkit maintenance: the default preset without major updates, for repos in maintenance mode",
+  "extends": ["github>neoromantic/devkit//renovate/default"],
+  "packageRules": [
+    {
+      "description": "Maintenance mode: patch and minor only",
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ]
+}
