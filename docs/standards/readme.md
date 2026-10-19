@@ -14,9 +14,7 @@ material to `docs/`.
 4. **Install.** Real channels only, in this order:
    1. Homebrew, see [homebrew.md](homebrew.md):
       ```sh
-      brew tap neoromantic/tap
-      brew trust --tap neoromantic/tap
-      brew install <name>
+      brew install neoromantic/tap/<name>
       ```
    2. Bun or npm (`bun add -g …` / `npm i -g …`), when the package is published.
    3. Install script, when there is one.

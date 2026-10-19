@@ -9,13 +9,14 @@ point at `neoromantic/homebrew-tap`; a rename breaks `brew upgrade` for everyone
 ## Install instructions (Homebrew 6+)
 
 Homebrew 6.0 (June 2026) refuses to load formulae from third-party taps until they are trusted.
-Write install steps in this order:
+Product READMEs install by the fully qualified name, which needs no trust step:
 
 ```sh
-brew tap neoromantic/tap
-brew trust --tap neoromantic/tap
-brew install <name>
+brew install neoromantic/tap/<name>
 ```
+
+Explain `brew tap` + `brew trust neoromantic/tap` (for short names) only in the tap's own
+README.
 
 Checked on Homebrew 7.0.10 (2026-10-19), with an empty trust store:
 
@@ -25,8 +26,7 @@ Checked on Homebrew 7.0.10 (2026-10-19), with an empty trust store:
 | `brew install neoromantic/tap/<name>` (fully qualified) | works: Homebrew trusts that one formula and installs it |
 | `brew trust --tap neoromantic/tap`, then `brew install <name>` | works |
 
-So the one-liner `brew install neoromantic/tap/<name>` is also fine for READMEs. The trust step
-matters when people later install other formulae from the tap by short name. Trust lives in
+The trust step only matters when people install formulae from the tap by short name. Trust lives in
 `~/.homebrew/trust.json` (or `$XDG_CONFIG_HOME/homebrew/trust.json`), and a Brewfile can declare
 it.
 
