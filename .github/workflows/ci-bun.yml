@@ -1,0 +1,122 @@
+# Reusable CI for Bun repos.
+#
+# Runs the script contract from package.json, skipping scripts that don't exist:
+#   check (or lint + typecheck) -> build -> test -> test:e2e (when e2e: true)
+#
+# Usage (see templates/ci.bun.yml):
+#   jobs:
+#     build:
+#       uses: neoromantic/devkit/.github/workflows/ci-bun.yml@v1
+#       permissions: { contents: read }
+#       with: { e2e: true, os: '["ubuntu-latest","macos-latest"]' }
+name: ci-bun
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: JSON list of runner labels
+        type: string
+        default: '["ubuntu-latest"]'
+      working-directory:
+        description: Directory with package.json
+        type: string
+        default: .
+      bun-version:
+        description: Bun version. Empty means .bun-version, then packageManager in package.json, then latest
+        type: string
+        default: ''
+      canary:
+        description: Use Bun canary (for scheduled early-warning runs)
+        type: boolean
+        default: false
+      e2e:
+        description: Run the test:e2e script if it exists
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  bun:
+    name: bun (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: devkit-ci-bun-${{ github.workflow }}-${{ github.ref }}-${{ inputs.working-directory }}-${{ matrix.os }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.os) }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve Bun version
+        id: bun
+        env:
+          INPUT_VERSION: ${{ inputs.bun-version }}
+          CANARY: ${{ inputs.canary }}
+        run: |
+          version="$INPUT_VERSION"
+          if [ "$CANARY" = "true" ]; then
+            version=canary
+          elif [ -z "$version" ] && [ -f .bun-version ]; then
+            version="$(tr -d '[:space:]' < .bun-version)"
+          elif [ -z "$version" ] && [ -f package.json ]; then
+            version="$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"bun@\([^"]*\)".*/\1/p' package.json | head -n 1)"
+          fi
+          echo "version=${version:-latest}" >> "$GITHUB_OUTPUT"
+          echo "Bun ${version:-latest}"
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ steps.bun.outputs.version }}
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Check
+        run: |
+          has() { bun -e "process.exit(require('./package.json').scripts?.['$1'] ? 0 : 1)"; }
+          if has check; then
+            bun run check
+          else
+            ran=0
+            if has lint; then bun run lint; ran=1; fi
+            if has typecheck; then bun run typecheck; ran=1; fi
+            [ "$ran" = 1 ] || echo "::notice::no check, lint or typecheck script; skipped"
+          fi
+
+      - name: Build
+        run: |
+          if bun -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)"; then
+            bun run build
+          else
+            echo "no build script; skipped"
+          fi
+
+      - name: Test
+        run: |
+          if bun -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
+            bun run test
+          else
+            echo "::notice::no test script; skipped"
+          fi
+
+      - name: Test (e2e)
+        if: inputs.e2e
+        run: |
+          if bun -e "process.exit(require('./package.json').scripts?.['test:e2e'] ? 0 : 1)"; then
+            bun run test:e2e
+          else
+            echo "::notice::e2e requested but there is no test:e2e script; skipped"
+          fi

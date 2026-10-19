@@ -1,0 +1,107 @@
+# Reusable CI for Python repos, built on uv.
+#
+#   uv sync (locked when uv.lock exists) -> ruff check -> tests (pytest by default)
+#
+# ruff and pytest come from the project's dev dependencies when they are there;
+# otherwise ruff runs through uvx and the test command runs as given.
+#
+# Usage (see templates/ci.python.yml):
+#   jobs:
+#     build:
+#       uses: neoromantic/devkit/.github/workflows/ci-python.yml@v1
+#       permissions: { contents: read }
+#       with: { python-version: '["3.11","3.14"]' }
+name: ci-python
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: JSON list of Python versions. "" means .python-version or uv's default
+        type: string
+        default: '[""]'
+      os:
+        description: JSON list of runner labels
+        type: string
+        default: '["ubuntu-latest"]'
+      working-directory:
+        description: Directory with pyproject.toml
+        type: string
+        default: .
+      ruff:
+        description: Run ruff check
+        type: boolean
+        default: true
+      test-command:
+        description: Test command, run with uv run. Empty skips tests
+        type: string
+        default: pytest -q
+      test-with:
+        description: Extra packages for the test run (space-separated, passed as uv run --with)
+        type: string
+        default: ''
+
+permissions: {}
+
+jobs:
+  python:
+    name: python ${{ matrix.python-version }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: devkit-ci-python-${{ github.workflow }}-${{ github.ref }}-${{ inputs.working-directory }}-${{ matrix.os }}-${{ matrix.python-version }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.os) }}
+        python-version: ${{ fromJSON(inputs.python-version) }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          working-directory: ${{ inputs.working-directory }}
+          enable-cache: true
+
+      - name: Install
+        run: |
+          if [ -f uv.lock ]; then
+            uv sync --locked --all-extras
+          elif [ -f pyproject.toml ]; then
+            uv sync --all-extras
+          else
+            echo "::notice::no pyproject.toml; skipped install"
+          fi
+
+      - name: Ruff
+        if: inputs.ruff
+        run: |
+          if uv run --no-sync ruff --version >/dev/null 2>&1; then
+            uv run --no-sync ruff check .
+          else
+            uvx ruff check .
+          fi
+
+      - name: Test
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+          TEST_WITH: ${{ inputs.test-with }}
+        run: |
+          if [ -z "$TEST_COMMAND" ]; then
+            echo "::notice::no test command; skipped"
+            exit 0
+          fi
+          with_args=()
+          for pkg in $TEST_WITH; do with_args+=(--with "$pkg"); done
+          read -r -a cmd <<< "$TEST_COMMAND"
+          uv run --no-sync "${with_args[@]}" -- "${cmd[@]}"

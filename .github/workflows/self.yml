@@ -1,0 +1,79 @@
+# CI for devkit itself: dogfoods the reusable workflows and lints the templates.
+name: self
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions: {}
+
+concurrency:
+  group: self-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  bun:
+    uses: ./.github/workflows/ci-bun.yml # zizmor: ignore[self-repository] actionlint 1.7.12 rejects the $/ form
+    permissions:
+      contents: read
+    with:
+      os: '["ubuntu-latest","macos-latest"]'
+      e2e: true
+
+  python-fixture:
+    uses: ./.github/workflows/ci-python.yml # zizmor: ignore[self-repository] actionlint 1.7.12 rejects the $/ form
+    permissions:
+      contents: read
+    with:
+      working-directory: tests/fixtures/python
+      python-version: '["3.11","3.12"]'
+
+  hygiene:
+    uses: ./.github/workflows/hygiene.yml # zizmor: ignore[self-repository] actionlint 1.7.12 rejects the $/ form
+    permissions:
+      contents: read
+
+  templates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      ACTIONLINT_VERSION: 1.7.12
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+      ZIZMOR_VERSION: 1.31.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint on the CI stubs
+        run: |
+          curl -fsSLo actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint && rm actionlint.tar.gz
+          ./actionlint -color templates/ci.bun.yml templates/ci.python.yml
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: false
+          ignore-empty-workdir: true
+      - name: zizmor on the CI stubs
+        run: |
+          mkdir -p "$RUNNER_TEMP/stub/.github/workflows"
+          cp templates/ci.bun.yml templates/ci.python.yml "$RUNNER_TEMP/stub/.github/workflows/"
+          cp templates/zizmor.yml "$RUNNER_TEMP/stub/.github/zizmor.yml"
+          uvx "zizmor@${ZIZMOR_VERSION}" --offline --format=github "$RUNNER_TEMP/stub"
+
+  # The one required check for the branch ruleset.
+  ci:
+    needs: [bun, python-fixture, hygiene, templates]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: All jobs passed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
