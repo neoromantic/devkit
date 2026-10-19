@@ -10,7 +10,7 @@
  * Frozen repos (see repos.yml) are skipped. Existing files without the
  * "managed by devkit" mark are left alone unless --adopt is given.
  */
-import { mkdtemp, rm } from 'node:fs/promises'
+import { lstat, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { applyAgentsBlock, type FileAction, planFile, render, templateVars } from './lib/managed'
@@ -43,6 +43,12 @@ async function readOrNull(path: string): Promise<string | null> {
   return (await f.exists()) ? f.text() : null
 }
 
+async function isSymlink(path: string): Promise<boolean> {
+  return (await lstat(path).catch(() => null))?.isSymbolicLink() ?? false
+}
+
+const SYMLINK_NOTE = 'is a symlink; devkit never writes through one. Replace it with a regular file by hand'
+
 async function writeFile(path: string, content: string): Promise<void> {
   await Bun.$`mkdir -p ${dirname(path)}`.quiet()
   await Bun.write(path, content)
@@ -53,6 +59,10 @@ export async function syncCheckout(repo: Repo, dir: string, opts: { adopt: boole
   const changes: Change[] = []
   const vars = templateVars(repo)
   for (const [target, template] of Object.entries(repo.files)) {
+    if (await isSymlink(join(dir, target))) {
+      changes.push({ path: target, action: 'warn', note: SYMLINK_NOTE })
+      continue
+    }
     const desired = render(await Bun.file(join(TEMPLATES_DIR, template)).text(), vars)
     const existing = await readOrNull(join(dir, target))
     const action = planFile(existing, desired, opts.adopt)
@@ -67,13 +77,21 @@ export async function syncCheckout(repo: Repo, dir: string, opts: { adopt: boole
   if (repo.agents !== false) {
     const block = await Bun.file(AGENTS_BLOCK_PATH).text()
     const agentsPath = join(dir, 'AGENTS.md')
+    const claudePath = join(dir, 'CLAUDE.md')
+    if ((await isSymlink(agentsPath)) || (await isSymlink(claudePath))) {
+      changes.push({
+        path: 'AGENTS.md',
+        action: 'warn',
+        note: `AGENTS.md or CLAUDE.md ${SYMLINK_NOTE}: AGENTS.md holds the rules, CLAUDE.md is "@AGENTS.md"`,
+      })
+      return changes
+    }
     const existing = await readOrNull(agentsPath)
     const desired = applyAgentsBlock(existing, block, repo.name)
     const action: FileAction = existing === desired ? 'ok' : existing === null ? 'create' : 'update'
     if (action !== 'ok') await writeFile(agentsPath, desired)
     changes.push({ path: 'AGENTS.md', action, note: 'devkit:agents block' })
 
-    const claudePath = join(dir, 'CLAUDE.md')
     const claude = await readOrNull(claudePath)
     if (claude === null) {
       await writeFile(claudePath, '@AGENTS.md\n')
