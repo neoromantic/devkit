@@ -4,6 +4,9 @@
 # scripts/repo-settings.ts compares GitHub settings with `settings`, `description`,
 # `homepage` and `topics` below. A field that is left out is not managed.
 #
+# Keys under `repos` are the GitHub repo names under `owner`, which are also the
+# folder names of local checkouts.
+#
 # A repo with `frozen_until` in the future is skipped by sync and by
 # repo-settings --apply. It still shows up in the settings diff.
 
