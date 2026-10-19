@@ -7,7 +7,8 @@
  *   options: --only a,b   --include-frozen (also apply to frozen repos)
  *
  * Managed: description, homepage, topics, has_wiki, has_projects,
- * delete_branch_on_merge, secret scanning and push protection.
+ * delete_branch_on_merge, secret scanning and push protection, and private
+ * vulnerability reporting (SECURITY.md points reporters there).
  */
 import { gh, isFrozen, loadReposFile, parseOnly, type Repo, resolveRepos, selectRepos } from './lib/repos'
 
@@ -20,6 +21,7 @@ export interface RepoState {
   delete_branch_on_merge: boolean
   secret_scanning: boolean
   secret_scanning_push_protection: boolean
+  private_vulnerability_reporting: boolean
 }
 
 export interface SettingDiff {
@@ -41,7 +43,7 @@ interface GitHubRepo {
   } | null
 }
 
-export function stateFromApi(api: GitHubRepo): RepoState {
+export function stateFromApi(api: GitHubRepo, privateVulnerabilityReporting = false): RepoState {
   return {
     description: api.description ?? '',
     homepage: api.homepage ?? '',
@@ -51,6 +53,7 @@ export function stateFromApi(api: GitHubRepo): RepoState {
     delete_branch_on_merge: api.delete_branch_on_merge ?? false,
     secret_scanning: api.security_and_analysis?.secret_scanning?.status === 'enabled',
     secret_scanning_push_protection: api.security_and_analysis?.secret_scanning_push_protection?.status === 'enabled',
+    private_vulnerability_reporting: privateVulnerabilityReporting,
   }
 }
 
@@ -79,18 +82,24 @@ export function diffSettings(current: RepoState, desired: Partial<RepoState>): S
 }
 
 /** Split a diff into the REST calls that apply it. */
-export function applyPlan(diffs: SettingDiff[]): { patch: Record<string, unknown>; topics: string[] | null } {
+export function applyPlan(diffs: SettingDiff[]): {
+  patch: Record<string, unknown>
+  topics: string[] | null
+  privateVulnerabilityReporting: boolean | null
+} {
   const patch: Record<string, unknown> = {}
   const security: Record<string, { status: string }> = {}
   let topics: string[] | null = null
+  let privateVulnerabilityReporting: boolean | null = null
   for (const d of diffs) {
     if (d.field === 'topics') topics = d.desired as string[]
+    else if (d.field === 'private_vulnerability_reporting') privateVulnerabilityReporting = d.desired as boolean
     else if (d.field === 'secret_scanning' || d.field === 'secret_scanning_push_protection') {
       security[d.field] = { status: d.desired ? 'enabled' : 'disabled' }
     } else patch[d.field] = d.desired
   }
   if (Object.keys(security).length) patch.security_and_analysis = security
-  return { patch, topics }
+  return { patch, topics, privateVulnerabilityReporting }
 }
 
 function show(v: unknown): string {
@@ -111,7 +120,8 @@ export async function main(argv: string[]): Promise<number> {
   for (const repo of repos) {
     let current: RepoState
     try {
-      current = stateFromApi(JSON.parse(gh(['api', `repos/${repo.fullName}`])) as GitHubRepo)
+      const pvr = JSON.parse(gh(['api', `repos/${repo.fullName}/private-vulnerability-reporting`])) as { enabled: boolean }
+      current = stateFromApi(JSON.parse(gh(['api', `repos/${repo.fullName}`])) as GitHubRepo, pvr.enabled)
     } catch (err) {
       console.error(`${repo.fullName}: ${(err as Error).message}`)
       failed++
@@ -133,12 +143,15 @@ export async function main(argv: string[]): Promise<number> {
       console.log('  skipped: frozen (pass --include-frozen to apply anyway)')
       continue
     }
-    const { patch, topics } = applyPlan(diffs)
+    const { patch, topics, privateVulnerabilityReporting } = applyPlan(diffs)
     try {
       if (Object.keys(patch).length) {
         gh(['api', '-X', 'PATCH', `repos/${repo.fullName}`, '--input', '-'], JSON.stringify(patch))
       }
       if (topics) gh(['api', '-X', 'PUT', `repos/${repo.fullName}/topics`, '--input', '-'], JSON.stringify({ names: topics }))
+      if (privateVulnerabilityReporting !== null) {
+        gh(['api', '-X', privateVulnerabilityReporting ? 'PUT' : 'DELETE', `repos/${repo.fullName}/private-vulnerability-reporting`])
+      }
       console.log('  applied')
     } catch (err) {
       console.error(`  error: ${(err as Error).message}`)

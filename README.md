@@ -22,7 +22,7 @@ and nothing here reformats a repo.
 | `lefthook/lefthook.yml` | Shared pre-commit hooks: gitleaks and the privacy scan |
 | `scripts/privacy-scan.ts` | Finds phone numbers, home paths and your private markers; prints only `path:line` |
 | `scripts/sync.ts` | Renders managed files and the AGENTS block into every repo; `--write` opens PRs |
-| `scripts/repo-settings.ts` | Diffs GitHub repo settings against `repos.yml`; `--apply` fixes them |
+| `scripts/repo-settings.ts` | Diffs GitHub repo settings (description, topics, wiki, secret scanning, private vulnerability reporting…) against `repos.yml`; `--apply` fixes them |
 | `repos.yml` | The repos devkit manages, their profile, description, topics and settings |
 | `agents/AGENTS.shared.md` | The shared block for each repo's `AGENTS.md` |
 | `templates/` | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml` |

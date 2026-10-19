@@ -16,6 +16,7 @@ settings:
   delete_branch_on_merge: true
   secret_scanning: true
   secret_scanning_push_protection: true
+  private_vulnerability_reporting: true
 
 # Managed files every profile gets: target path in the repo -> file in templates/.
 files:

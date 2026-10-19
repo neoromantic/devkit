@@ -10,6 +10,7 @@ export interface Settings {
   delete_branch_on_merge?: boolean
   secret_scanning?: boolean
   secret_scanning_push_protection?: boolean
+  private_vulnerability_reporting?: boolean
 }
 
 export interface RepoEntry {

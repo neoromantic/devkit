@@ -88,7 +88,11 @@ describe('repo-settings', () => {
     expect(plan).toEqual({
       patch: { description: 'new', security_and_analysis: { secret_scanning_push_protection: { status: 'enabled' } } },
       topics: ['c'],
+      privateVulnerabilityReporting: null,
     })
+    expect(applyPlan(diffSettings(current, { private_vulnerability_reporting: true })).privateVulnerabilityReporting).toBe(
+      true,
+    )
   })
 
   test('desired state merges defaults with repo fields', () => {
