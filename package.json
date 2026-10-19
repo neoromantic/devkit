@@ -1,0 +1,37 @@
+{
+  "name": "@goodit/devkit",
+  "version": "1.0.0",
+  "description": "Shared CI workflows, git hooks, templates and agent rules for neoromantic's open-source repos",
+  "license": "MIT",
+  "author": "Sergey Petrov",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neoromantic/devkit.git"
+  },
+  "homepage": "https://github.com/neoromantic/devkit#readme",
+  "bugs": "https://github.com/neoromantic/devkit/issues",
+  "packageManager": "bun@1.4.2",
+  "bin": {
+    "devkit": "scripts/cli.ts"
+  },
+  "files": [
+    "scripts",
+    "lefthook",
+    ".lefthook",
+    "renovate",
+    "templates",
+    "agents"
+  ],
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test",
+    "privacy-scan": "bun scripts/privacy-scan.ts",
+    "sync": "bun scripts/sync.ts",
+    "repo-settings": "bun scripts/repo-settings.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.3",
+    "typescript": "7.0.2"
+  }
+}
