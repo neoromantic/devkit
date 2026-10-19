@@ -106,6 +106,22 @@ function show(v: unknown): string {
   return Array.isArray(v) ? `[${v.join(', ')}]` : JSON.stringify(v)
 }
 
+/**
+ * One diff line. Lists (topics) show only what is added and removed, so a
+ * different order on GitHub never reads as a change.
+ */
+export function formatDiff(d: SettingDiff): string {
+  if (Array.isArray(d.current) && Array.isArray(d.desired)) {
+    const now = d.current as string[]
+    const want = d.desired as string[]
+    const added = want.filter((v) => !now.includes(v))
+    const removed = now.filter((v) => !want.includes(v))
+    const parts = [added.length ? `+${show(added)}` : '', removed.length ? `-${show(removed)}` : '']
+    return `${d.field}: ${parts.filter(Boolean).join(' ')}`
+  }
+  return `${d.field}: ${show(d.current)} -> ${show(d.desired)}`
+}
+
 export async function main(argv: string[]): Promise<number> {
   if (argv.includes('--help') || argv.includes('-h')) {
     console.log('usage: repo-settings [--apply] [--only a,b] [--include-frozen]')
@@ -134,7 +150,7 @@ export async function main(argv: string[]): Promise<number> {
       continue
     }
     console.log(`${repo.fullName}:${frozen ? ' (frozen)' : ''}`)
-    for (const d of diffs) console.log(`  ${d.field}: ${show(d.current)} -> ${show(d.desired)}`)
+    for (const d of diffs) console.log(`  ${formatDiff(d)}`)
     if (!apply) {
       pending++
       continue

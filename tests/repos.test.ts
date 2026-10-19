@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { isManaged, render, templateVars } from '../scripts/lib/managed'
 import { AGENTS_BLOCK_PATH, isFrozen, loadReposFile, resolveRepos, TEMPLATES_DIR } from '../scripts/lib/repos'
-import { applyPlan, desiredState, diffSettings, type RepoState, stateFromApi } from '../scripts/repo-settings'
+import { applyPlan, desiredState, diffSettings, formatDiff, type RepoState, stateFromApi } from '../scripts/repo-settings'
 
 const repos = resolveRepos(await loadReposFile())
 
@@ -93,6 +93,15 @@ describe('repo-settings', () => {
     expect(applyPlan(diffSettings(current, { private_vulnerability_reporting: true })).privateVulnerabilityReporting).toBe(
       true,
     )
+  })
+
+  test('topics diff lists only added and removed topics', () => {
+    const [d] = diffSettings(current, { topics: ['a', 'c', 'b'] })
+    expect(d && formatDiff(d)).toBe('topics: +[c]')
+    const [r] = diffSettings(current, { topics: ['a', 'd'] })
+    expect(r && formatDiff(r)).toBe('topics: +[d] -[b]')
+    const [s] = diffSettings(current, { description: 'new' })
+    expect(s && formatDiff(s)).toBe('description: "old" -> "new"')
   })
 
   test('desired state merges defaults with repo fields', () => {
