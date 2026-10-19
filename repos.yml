@@ -102,7 +102,6 @@ repos:
 
   ai-usage:
     profile: go
-    frozen_until: "2026-10-27"
     description: Local usage collector for Codex, Claude, Grok, and Hermes.
     homepage: https://au.sergeybaus.com
     topics: [claude-code, codex, cli, go, sergeybaus-oss]
