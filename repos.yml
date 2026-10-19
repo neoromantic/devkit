@@ -1,0 +1,104 @@
+# Repos that devkit manages.
+#
+# scripts/sync.ts renders `files` (from templates/) and the AGENTS block into each repo.
+# scripts/repo-settings.ts compares GitHub settings with `settings`, `description`,
+# `homepage` and `topics` below. A field that is left out is not managed.
+#
+# A repo with `frozen_until` in the future is skipped by sync and by
+# repo-settings --apply. It still shows up in the settings diff.
+
+owner: neoromantic
+
+# Settings every repo should have unless it overrides them.
+settings:
+  has_wiki: false
+  has_projects: false
+  delete_branch_on_merge: true
+  secret_scanning: true
+  secret_scanning_push_protection: true
+
+# Managed files every profile gets: target path in the repo -> file in templates/.
+files:
+  SECURITY.md: SECURITY.md
+  .gitleaks.toml: .gitleaks.toml
+  .github/zizmor.yml: zizmor.yml
+  renovate.json: renovate.json
+  lefthook.yml: lefthook.yml
+
+profiles:
+  bun:
+    files:
+      .github/workflows/ci.yml: ci.bun.yml
+      CONTRIBUTING.md: CONTRIBUTING.md
+      .github/PULL_REQUEST_TEMPLATE.md: PULL_REQUEST_TEMPLATE.md
+  python:
+    files:
+      .github/workflows/ci.yml: ci.python.yml
+      CONTRIBUTING.md: CONTRIBUTING.md
+      .github/PULL_REQUEST_TEMPLATE.md: PULL_REQUEST_TEMPLATE.md
+  # Agent skills: no CI stub yet (stdlib Python, tests run with uv run python -m unittest).
+  skill:
+    files:
+      CONTRIBUTING.md: CONTRIBUTING.md
+      .github/PULL_REQUEST_TEMPLATE.md: PULL_REQUEST_TEMPLATE.md
+  # Go keeps its own ci.yml and adds hygiene.yml by hand.
+  go:
+    files:
+      CONTRIBUTING.md: CONTRIBUTING.md
+      .github/PULL_REQUEST_TEMPLATE.md: PULL_REQUEST_TEMPLATE.md
+  infra:
+    files: {}
+
+repos:
+  telegram-sync-cli:
+    profile: bun
+    description: Telegram CLI - Command-line interface for Telegram with multi-account support
+    topics: [telegram, cli, bun, mtproto, sqlite, sergeybaus-oss]
+
+  telesec:
+    profile: python
+    description: Telesec — Telegram Business secretary for Hermes
+    homepage: https://telesec.sergeybaus.com
+    topics:
+      - hermes-agent
+      - python
+      - speech-to-text
+      - telegram-business
+      - hermes-plugin
+      - voice-transcription
+      - hermes-agent-plugin
+      - telegram
+      - telegram-bot
+      - transcription
+      - voice-to-text
+      - sergeybaus-oss
+
+  ornament-skill:
+    profile: skill
+    description: "Claude Code skill for the Ornament Health API: read profiles, lab biomarkers, history, abnormal results, and health-condition scores."
+    topics: [claude-code, agent-skills, ornament-health, biomarkers, sergeybaus-oss]
+
+  evals:
+    profile: bun
+    maintenance: true
+    description: Pragmatic eval framework for LLM features. Runs eval files as Bun tests with scorers, baselines, and reporting.
+    topics: [llm, evals, bun, testing]
+
+  homebrew-tap:
+    profile: infra
+    description: "Homebrew formulae of neoromantic's tools: ai-usage"
+    topics: [homebrew, homebrew-tap]
+
+  devkit:
+    profile: infra
+    description: Shared CI workflows, git hooks, templates and agent rules for neoromantic's open-source repos
+    topics: [github-actions, reusable-workflows, lefthook, renovate, gitleaks, developer-tools]
+    # devkit runs its hooks from its own lefthook.yml, not through a remote.
+    exclude: [lefthook.yml]
+
+  ai-usage:
+    profile: go
+    frozen_until: "2026-10-27"
+    description: Local usage collector for Codex, Claude, Grok, and Hermes.
+    homepage: https://au.sergeybaus.com
+    topics: [claude-code, codex, cli, go, sergeybaus-oss]
