@@ -91,7 +91,10 @@ bunx github:neoromantic/devkit#v1 privacy-scan --all
 ```
 
 Private markers live in `~/.config/devkit/private-markers` (mode `0600`, never in a repo):
-one string or `/regex/flags` per line. See [docs/standards/security.md](docs/standards/security.md).
+one string or `/regex/flags` per line. A line that is fine on purpose takes a
+`privacy-scan:allow` comment; generated fixtures that can't take one go in the repo's
+`.privacy-scan-ignore` (path globs, optionally limited to some rule kinds). See
+[docs/standards/security.md](docs/standards/security.md).
 
 ### Renovate
 

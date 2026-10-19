@@ -17,6 +17,7 @@ import { homedir } from 'node:os'
 import { join, relative } from 'node:path'
 
 export const ALLOW_COMMENT = 'privacy-scan:allow'
+export const IGNORE_FILE = '.privacy-scan-ignore'
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.venv', 'dist', '.tmp'])
 
@@ -91,6 +92,49 @@ export function parseMarkers(text: string): Rule[] {
   return rules
 }
 
+const RULE_KINDS: readonly RuleKind[] = ['marker', 'phone', 'home-path']
+
+export interface IgnoreRule {
+  glob: InstanceType<typeof Bun.Glob>
+  /** Rule kinds this entry silences; null means every kind. */
+  kinds: ReadonlySet<RuleKind> | null
+}
+
+/**
+ * Parse a repo's `.privacy-scan-ignore`: one path glob per line, relative to the repo root,
+ * optionally followed by the rule kinds it silences (`marker`, `phone`, `home-path`, comma
+ * separated). No kinds means every kind. Blank lines and `#` comments are skipped.
+ * For files that can't carry an inline allow comment, such as generated fixtures.
+ */
+export function parseIgnore(text: string): IgnoreRule[] {
+  const rules: IgnoreRule[] = []
+  text.split(/\r?\n/).forEach((raw, i) => {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) return
+    const [pattern = '', kindList, ...rest] = line.split(/\s+/)
+    if (rest.length > 0) throw new Error(`${IGNORE_FILE} line ${i + 1}: expected "<glob> [kinds]"`)
+    let kinds: Set<RuleKind> | null = null
+    if (kindList) {
+      kinds = new Set()
+      for (const kind of kindList.split(',')) {
+        if (!RULE_KINDS.includes(kind as RuleKind)) {
+          throw new Error(`${IGNORE_FILE} line ${i + 1}: unknown rule kind "${kind}" (use ${RULE_KINDS.join(', ')})`)
+        }
+        kinds.add(kind as RuleKind)
+      }
+    }
+    rules.push({ glob: new Bun.Glob(pattern), kinds })
+  })
+  return rules
+}
+
+/** The rules that still apply to `path` once the ignore entries that match it are taken out. */
+export function rulesFor(path: string, rules: Rule[], ignore: IgnoreRule[]): Rule[] {
+  const matching = ignore.filter((ig) => ig.glob.match(path))
+  if (matching.length === 0) return rules
+  return rules.filter((rule) => !matching.some((ig) => ig.kinds === null || ig.kinds.has(rule.kind)))
+}
+
 export function scanLine(line: string, rules: Rule[]): RuleKind | null {
   if (line.includes(ALLOW_COMMENT)) return null
   for (const rule of rules) {
@@ -99,10 +143,12 @@ export function scanLine(line: string, rules: Rule[]): RuleKind | null {
   return null
 }
 
-export function scanText(path: string, text: string, rules: Rule[]): Hit[] {
+export function scanText(path: string, text: string, rules: Rule[], ignore: IgnoreRule[] = []): Hit[] {
   const hits: Hit[] = []
+  const active = rulesFor(path, rules, ignore)
+  if (active.length === 0) return hits
   text.split('\n').forEach((line, i) => {
-    const kind = scanLine(line, rules)
+    const kind = scanLine(line, active)
     if (kind) hits.push({ path, line: i + 1, kind })
   })
   return hits
@@ -171,10 +217,10 @@ function git(args: string[], cwd?: string): string {
   return proc.stdout.toString()
 }
 
-function scanAdded(added: AddedLine[], rules: Rule[]): Hit[] {
+function scanAdded(added: AddedLine[], rules: Rule[], ignore: IgnoreRule[]): Hit[] {
   const hits: Hit[] = []
   for (const a of added) {
-    const kind = scanLine(a.text, rules)
+    const kind = scanLine(a.text, rulesFor(a.path, rules, ignore))
     if (kind) hits.push({ path: a.path, line: a.line, kind })
   }
   return hits
@@ -221,6 +267,18 @@ export async function loadMarkerRules(path: string, warn: (msg: string) => void)
   return parseMarkers(await file.text())
 }
 
+/** The repo's `.privacy-scan-ignore` at the git root (or the current folder outside git), if any. */
+export async function loadIgnoreRules(): Promise<IgnoreRule[]> {
+  let root = process.cwd()
+  try {
+    root = git(['rev-parse', '--show-toplevel']).trim() || root
+  } catch {
+    // not a git checkout: scanning given paths
+  }
+  const file = Bun.file(join(root, IGNORE_FILE))
+  return (await file.exists()) ? parseIgnore(await file.text()) : []
+}
+
 const USAGE = `usage: privacy-scan [--staged | --diff <range> | --all | <path>...] [--markers <file> | --no-markers]
 
   (no args)        scan lines added in the staged changes (pre-commit)
@@ -231,7 +289,10 @@ const USAGE = `usage: privacy-scan [--staged | --diff <range> | --all | <path>..
   --markers <file> private markers file (default: $DEVKIT_PRIVATE_MARKERS or ~/.config/devkit/private-markers)
   --no-markers     generic patterns only
 
-Prints path:line for each hit and exits 1. Add "${ALLOW_COMMENT}" to a line to accept it.`
+Prints path:line for each hit and exits 1. Add "${ALLOW_COMMENT}" to a line to accept it.
+Files that can't carry that comment, such as generated fixtures, go in ${IGNORE_FILE} at the
+repo root: one path glob per line, optionally followed by the kinds it silences
+(marker, phone, home-path; comma separated, default all). Paths are relative to the repo root.`
 
 export async function main(argv: string[]): Promise<number> {
   let mode: 'staged' | 'diff' | 'all' | 'paths' = 'staged'
@@ -269,9 +330,11 @@ export async function main(argv: string[]): Promise<number> {
   }
 
   let rules: Rule[]
+  let ignore: IgnoreRule[]
   try {
     const markers = markersPath ? await loadMarkerRules(markersPath, (m) => console.error(m)) : []
     rules = [...markers, ...GENERIC_RULES]
+    ignore = await loadIgnoreRules()
   } catch (err) {
     console.error(`privacy-scan: ${(err as Error).message}`)
     return 2
@@ -284,7 +347,7 @@ export async function main(argv: string[]): Promise<number> {
         mode === 'staged'
           ? ['diff', '--cached', '-U0', '--no-color', '--no-ext-diff', '--diff-filter=ACMR']
           : ['diff', '-U0', '--no-color', '--no-ext-diff', '--diff-filter=ACMR', range]
-      hits = scanAdded(parseUnifiedDiff(git(args)), rules)
+      hits = scanAdded(parseUnifiedDiff(git(args)), rules, ignore)
     } else {
       const files: string[] = []
       if (mode === 'all') {
@@ -294,7 +357,7 @@ export async function main(argv: string[]): Promise<number> {
       }
       for (const f of files) {
         const text = await readTextFile(f)
-        if (text !== null) hits.push(...scanText(relative(process.cwd(), f) || f, text, rules))
+        if (text !== null) hits.push(...scanText(relative(process.cwd(), f) || f, text, rules, ignore))
       }
     }
   } catch (err) {

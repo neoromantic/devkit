@@ -30,6 +30,18 @@ Git history is public too: a leak needs a fix commit, and a leaked secret needs 
 It prints only `path:line`, never the matched text, and exits 1 on a hit. Add
 `privacy-scan:allow` to a line that is fine on purpose.
 
+Files that can't carry that comment, such as generated fixtures, JSON or golden files compared
+byte for byte, go in `.privacy-scan-ignore` at the repo root. Each line is a path glob relative
+to the root, optionally followed by the rule kinds it silences (`marker`, `phone`, `home-path`,
+comma separated); without kinds it silences all of them. Name the narrowest kinds that fit, so
+the other rules still guard those files:
+
+```text
+# made-up demo reports and golden files
+docs/demo/*.json         home-path
+internal/view/testdata/** home-path,marker
+```
+
 ## gitleaks
 
 - Shared config: `.gitleaks.toml` (managed), which extends the default rules.

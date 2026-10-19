@@ -7,8 +7,11 @@ import {
   GENERIC_RULES,
   hasHomePath,
   hasPhone,
+  IGNORE_FILE,
+  parseIgnore,
   parseMarkers,
   parseUnifiedDiff,
+  rulesFor,
   scanLine,
   scanText,
 } from '../scripts/privacy-scan'
@@ -76,6 +79,31 @@ describe('scanText', () => {
   test('reports 1-based line numbers', () => {
     const hits = scanText('a.md', `one\n${PHONE}\nthree\n${HOME}\n`, GENERIC_RULES)
     expect(hits.map((h) => `${h.path}:${h.line}:${h.kind}`)).toEqual(['a.md:2:phone', 'a.md:4:home-path'])
+  })
+})
+
+describe('ignore file', () => {
+  const markers = parseMarkers('project falcon\n')
+  const rules = [...markers, ...GENERIC_RULES]
+
+  test('a glob without kinds silences every rule for matching paths', () => {
+    const ignore = parseIgnore('# generated\n\ntestdata/**\n')
+    expect(rulesFor('testdata/a/report.json', rules, ignore)).toEqual([])
+    expect(rulesFor('src/report.go', rules, ignore)).toBe(rules)
+  })
+
+  test('kinds limit what an entry silences', () => {
+    const ignore = parseIgnore('docs/demo/*.json home-path,marker\n')
+    const left = rulesFor('docs/demo/team.json', rules, ignore)
+    expect(left.map((r) => r.kind)).toEqual(['phone'])
+    const text = `Project Falcon\n${HOME}\n${PHONE}\n`
+    expect(scanText('docs/demo/team.json', text, rules, ignore).map((h) => h.line)).toEqual([3])
+    expect(scanText('docs/other.json', text, rules, ignore).map((h) => h.line)).toEqual([1, 2, 3])
+  })
+
+  test('bad lines report the line number', () => {
+    expect(() => parseIgnore('a/** phone\nb/** secrets\n')).toThrow(`${IGNORE_FILE} line 2: unknown rule kind`)
+    expect(() => parseIgnore('a/** phone extra\n')).toThrow(`${IGNORE_FILE} line 1: expected`)
   })
 })
 
@@ -155,6 +183,37 @@ describe('cli', () => {
       const all = await runScan(['--all', '--no-markers'], dir)
       expect(all.code).toBe(1)
       expect(all.stdout.trim()).toBe('a.md:1')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('the ignore file at the repo root applies to diff and --all scans', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'devkit-scan-'))
+    try {
+      const git = (...a: string[]) => Bun.spawnSync(['git', ...a], { cwd: dir })
+      git('init', '-q', '-b', 'main')
+      git('config', 'user.email', 'test@example.com')
+      git('config', 'user.name', 'test')
+      await Bun.write(join(dir, 'fixtures', 'report.golden'), `${HOME}\n`)
+      await Bun.write(join(dir, 'notes.md'), `${HOME}\n`)
+      git('add', '.')
+
+      const before = await runScan(['--no-markers'], dir)
+      expect(before.stdout.trim().split('\n').sort()).toEqual(['fixtures/report.golden:1', 'notes.md:1'])
+
+      await Bun.write(join(dir, IGNORE_FILE), 'fixtures/** home-path\n')
+      const staged = await runScan(['--no-markers'], dir)
+      expect(staged.code).toBe(1)
+      expect(staged.stdout.trim()).toBe('notes.md:1')
+
+      git('commit', '-q', '-m', 'init')
+      const all = await runScan(['--all', '--no-markers'], dir)
+      expect(all.stdout.trim()).toBe('notes.md:1')
+
+      await Bun.write(join(dir, IGNORE_FILE), 'fixtures/** secrets\n')
+      const bad = await runScan(['--all', '--no-markers'], dir)
+      expect(bad.code).toBe(2)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
