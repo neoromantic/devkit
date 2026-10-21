@@ -11,6 +11,7 @@
  * vulnerability reporting (SECURITY.md points reporters there), and the
  * `main (devkit)` branch ruleset for repos with `required_checks`.
  */
+import { parseArgs } from 'node:util'
 import { gh, isFrozen, loadReposFile, parseOnly, type Repo, resolveRepos, selectRepos } from './lib/repos'
 
 export interface RepoState {
@@ -241,44 +242,73 @@ function fetchRuleset(fullName: string): { id: number; body: Ruleset } | null {
 
 export async function main(argv: string[]): Promise<number> {
   if (argv.includes('--help') || argv.includes('-h')) {
-    console.log('usage: repo-settings [--apply] [--only a,b] [--include-frozen]')
+    console.log('usage: repo-settings [--apply | --check] [--json] [--config path] [--only a,b] [--include-frozen]')
     return 0
   }
-  const apply = argv.includes('--apply')
-  const includeFrozen = argv.includes('--include-frozen')
-  const repos = selectRepos(resolveRepos(await loadReposFile()), parseOnly(argv))
+  const { values } = parseArgs({ args: argv, options: {
+    config: { type: 'string' }, only: { type: 'string', multiple: true },
+    check: { type: 'boolean' }, json: { type: 'boolean' },
+    apply: { type: 'boolean' }, 'include-frozen': { type: 'boolean' },
+  } })
+  const apply = values.apply === true
+  const includeFrozen = values['include-frozen'] === true
+  if (apply && values.check) throw new Error('--apply cannot be combined with --check')
+  const repos = selectRepos(resolveRepos(await loadReposFile(values.config)), parseOnly(argv))
+  const results: {
+    repo: string; status: string; frozen: boolean; diffs: (SettingDiff | RulesetDiff)[]; error?: string
+  }[] = []
   let pending = 0
   let failed = 0
 
   for (const repo of repos) {
+    const frozen = isFrozen(repo)
+    const result: (typeof results)[number] = { repo: repo.fullName, status: 'ok', frozen, diffs: [] }
+    results.push(result)
+    const desired = desiredState(repo)
+    if (Object.keys(desired).length === 0 && repo.required_checks === undefined) {
+      result.status = 'unmanaged'
+      pending++
+      if (!values.json) console.log(`${repo.fullName}: unmanaged`)
+      continue
+    }
     let current: RepoState
     let ruleset: { id: number; body: Ruleset } | null = null
     try {
-      const pvr = JSON.parse(gh(['api', `repos/${repo.fullName}/private-vulnerability-reporting`])) as { enabled: boolean }
-      current = stateFromApi(JSON.parse(gh(['api', `repos/${repo.fullName}`])) as GitHubRepo, pvr.enabled)
+      let pvr = false
+      if (desired.private_vulnerability_reporting !== undefined) {
+        pvr = (JSON.parse(gh(['api', `repos/${repo.fullName}/private-vulnerability-reporting`])) as { enabled: boolean }).enabled
+      }
+      current = stateFromApi(JSON.parse(gh(['api', `repos/${repo.fullName}`])) as GitHubRepo, pvr)
       if (repo.required_checks !== undefined) ruleset = fetchRuleset(repo.fullName)
     } catch (err) {
-      console.error(`${repo.fullName}: ${(err as Error).message}`)
+      result.status = 'error'
+      result.error = (err as Error).message
+      if (!values.json) console.error(`${repo.fullName}: ${result.error}`)
       failed++
       continue
     }
-    const diffs = diffSettings(current, desiredState(repo))
+    const diffs = diffSettings(current, desired)
     const wantRuleset = repo.required_checks === undefined ? null : desiredRuleset(repo.required_checks)
     const rulesetDiffs = wantRuleset ? diffRuleset(ruleset?.body ?? null, wantRuleset) : []
-    const frozen = isFrozen(repo)
+    result.diffs = [...diffs, ...rulesetDiffs]
+    if (frozen) result.status = 'frozen'
     if (diffs.length === 0 && rulesetDiffs.length === 0) {
-      console.log(`${repo.fullName}: ok`)
+      if (frozen) pending++
+      if (!values.json) console.log(`${repo.fullName}: ${result.status}`)
       continue
     }
-    console.log(`${repo.fullName}:${frozen ? ' (frozen)' : ''}`)
-    for (const d of diffs) console.log(`  ${formatDiff(d)}`)
-    if (wantRuleset) for (const d of rulesetDiffs) console.log(`  ${formatRulesetDiff(d, wantRuleset)}`)
+    if (!frozen) result.status = 'drift'
+    if (!values.json) {
+      console.log(`${repo.fullName}: ${result.status}`)
+      for (const d of diffs) console.log(`  ${formatDiff(d)}`)
+      if (wantRuleset) for (const d of rulesetDiffs) console.log(`  ${formatRulesetDiff(d, wantRuleset)}`)
+    }
     if (!apply) {
       pending++
       continue
     }
     if (frozen && !includeFrozen) {
-      console.log('  skipped: frozen (pass --include-frozen to apply anyway)')
+      if (!values.json) console.log('  skipped: frozen (pass --include-frozen to apply anyway)')
       continue
     }
     const { patch, topics, privateVulnerabilityReporting } = applyPlan(diffs)
@@ -294,16 +324,27 @@ export async function main(argv: string[]): Promise<number> {
         const path = ruleset ? `repos/${repo.fullName}/rulesets/${ruleset.id}` : `repos/${repo.fullName}/rulesets`
         gh(['api', '-X', ruleset ? 'PUT' : 'POST', path, '--input', '-'], JSON.stringify(wantRuleset))
       }
-      console.log('  applied')
+      result.status = 'applied'
+      if (!values.json) console.log('  applied')
     } catch (err) {
-      console.error(`  error: ${(err as Error).message}`)
+      result.status = 'error'
+      result.error = (err as Error).message
+      if (!values.json) console.error(`  error: ${result.error}`)
       failed++
     }
   }
-  if (!apply && pending) console.log(`\n${pending} repo(s) differ. Run with --apply to change them.`)
-  return failed ? 1 : 0
+  if (values.json) console.log(JSON.stringify(results))
+  else if (!apply && pending) console.log(`\n${pending} repo(s) need attention; inspect the status and diffs above.`)
+  if (failed) return 2
+  if (values.check && pending) return 1
+  return 0
 }
 
 if (import.meta.main) {
-  process.exit(await main(process.argv.slice(2)))
+  try {
+    process.exit(await main(process.argv.slice(2)))
+  } catch (err) {
+    console.error((err as Error).message)
+    process.exit(2)
+  }
 }

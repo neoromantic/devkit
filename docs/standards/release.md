@@ -1,21 +1,29 @@
 # Release standard
 
-"Released" means a published, immutable GitHub Release. A tag alone is not a release.
+The project's documented procedure defines delivery. Shared tooling does not replace it or
+authorise owner-only steps.
+
+| Delivery | Evidence |
+|---|---|
+| Versioned package or binary | Published release, expected assets and registry version; a tag alone is insufficient |
+| Skill installed from a branch | Verified installable commit SHA |
+| Web service | Production deployment URL and source revision, checked live |
+| Desktop app | Published build and update channel, through the owner's release procedure |
 
 ## Versions
 
 - SemVer. One source of truth per repo:
   - Bun/TS: `version` in `package.json` (read it at runtime; never hardcode it elsewhere).
-  - Python: `version` in `pyproject.toml`; other files (such as a plugin manifest) are updated by
-    the release tool, not by hand.
+  - Python: `version` in `pyproject.toml`; update any required manifests through the local procedure.
   - Go: the git tag.
 - `0.x` means anything may change in a minor. Renovate never automerges `0.x` updates.
 
 ## Engine
 
-Until release-please is configured, follow the repo's documented release procedure.
+Use the repo's existing release command, tag workflow or manual procedure. Do not add a release
+engine just to conform to shared documentation.
 
-- Default: [release-please](https://github.com/googleapis/release-please) in manifest mode
+- When adopting [release-please](https://github.com/googleapis/release-please), use manifest mode
   (`release-please-config.json` + `.release-please-manifest.json`). Merging the Release PR
   creates the tag and a **draft** release (`"draft": true`, `"force-tag-creation": true`).
 - The repo's own `release.yml` then builds assets, uploads them to the draft, and publishes it.
@@ -28,9 +36,8 @@ Until release-please is configured, follow the repo's documented release procedu
 
 ## CHANGELOG
 
-- `CHANGELOG.md` in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) shape, generated
-  from Conventional Commits by the release tool. Entries from before the tool sit under a
-  "Before release-please" heading.
+- Keep the project's existing notes format: a changelog, release notes or website entries.
+  New changelogs use [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) shape.
 - Don't edit generated sections by hand. Fix the commit message or the Release PR body instead.
 
 ## Registries
@@ -50,9 +57,12 @@ Until release-please is configured, follow the repo's documented release procedu
 
 ## After a release
 
-1. Check the release page, the registry (`npm view <pkg> version`) and a clean install.
-2. The maintainer updates the website and announcements for minor and major releases. Patch
-   releases are not announced.
+1. Check the applicable delivery evidence above, distribution channels and a clean install or
+   user flow. For npm, check the registry with `npm view <pkg> version`.
+2. Update affected documentation and website content. Prepare verified facts and screenshots
+   for the maintainer's separate publishing process.
+3. Follow the [product content standard](product-content.md); record the verified revision and
+   links. Posting accounts, queues and announcement policy stay outside product repositories.
 
 ## Releasing devkit itself
 

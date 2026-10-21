@@ -13,6 +13,7 @@
 import { lstat, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { parseArgs } from 'node:util'
 import { applyAgentsBlock, type FileAction, planFile, render, templateVars } from './lib/managed'
 import {
   AGENTS_BLOCK_PATH,
@@ -120,34 +121,53 @@ const WRITE_ACTIONS = new Set(['create', 'update', 'adopt'])
 
 export async function main(argv: string[]): Promise<number> {
   if (argv.includes('--help') || argv.includes('-h')) {
-    console.log('usage: sync [--dry-run | --write] [--only a,b] [--adopt] [--keep]')
+    console.log('usage: sync [--dry-run | --write | --check] [--json] [--config path] [--only a,b] [--adopt] [--keep]')
     return 0
   }
-  const write = argv.includes('--write')
-  const adopt = argv.includes('--adopt')
-  const keep = argv.includes('--keep')
-  const repos = selectRepos(resolveRepos(await loadReposFile()), parseOnly(argv))
+  const { values } = parseArgs({ args: argv, options: {
+    config: { type: 'string' }, only: { type: 'string', multiple: true },
+    check: { type: 'boolean' }, json: { type: 'boolean' }, 'dry-run': { type: 'boolean' },
+    write: { type: 'boolean' }, adopt: { type: 'boolean' }, keep: { type: 'boolean' },
+  } })
+  const write = values.write === true
+  const adopt = values.adopt === true
+  const keep = values.keep === true
+  if (write && (values.check || values['dry-run'])) throw new Error('--write cannot be combined with --check or --dry-run')
+  const repos = selectRepos(resolveRepos(await loadReposFile(values.config)), parseOnly(argv))
   const version = (await Bun.file(join(ROOT, 'package.json')).json()).version as string
+  const results: { repo: string; status: string; changes: Change[]; error?: string; url?: string }[] = []
   let failed = 0
+  let pending = 0
 
   for (const repo of repos) {
+    const result: (typeof results)[number] = { repo: repo.fullName, status: 'ok', changes: [] }
+    results.push(result)
     if (isFrozen(repo)) {
-      console.log(`\n=== ${repo.fullName}: frozen${repo.frozen_until ? ` until ${repo.frozen_until}` : ''}, skipped`)
+      result.status = 'frozen'
+      pending++
+      if (!values.json) console.log(`\n=== ${repo.fullName}: frozen, skipped`)
       continue
     }
     const dir = await mkdtemp(join(tmpdir(), `devkit-sync-${repo.name}-`))
     try {
       run(['gh', 'repo', 'clone', repo.fullName, dir, '--', '--depth', '1', '--quiet'])
       const changes = await syncCheckout(repo, dir, { adopt })
-      printChanges(repo, changes)
+      result.changes = changes
+      if (!values.json) printChanges(repo, changes)
+      if (changes.some((c) => c.action !== 'ok')) result.status = 'drift'
+      if (changes.some((c) => c.action === 'skip' || c.action === 'warn')) result.status = 'blocked'
+      if (changes.length === 0) result.status = 'unmanaged'
+      if (result.status !== 'ok') pending++
       if (!changes.some((c) => WRITE_ACTIONS.has(c.action))) {
-        console.log('  in sync')
+        if (!values.json) console.log(`  ${result.status}`)
         continue
       }
       run(['git', 'add', '-A'], dir)
       if (!write) {
-        console.log(run(['git', '--no-pager', 'diff', '--cached', '--no-color', '--stat'], dir))
-        console.log(run(['git', '--no-pager', 'diff', '--cached', '--no-color'], dir))
+        if (!values.json && !values.check) {
+          console.log(run(['git', '--no-pager', 'diff', '--cached', '--no-color', '--stat'], dir))
+          console.log(run(['git', '--no-pager', 'diff', '--cached', '--no-color'], dir))
+        }
         continue
       }
       const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13)
@@ -166,18 +186,31 @@ export async function main(argv: string[]): Promise<number> {
         ['gh', 'pr', 'create', '--repo', repo.fullName, '--head', branch, '--title', `chore: sync devkit v${version}`, '--body', body],
         dir,
       ).trim()
-      console.log(`  PR: ${url}`)
+      result.url = url
+      if (result.status === 'drift') result.status = 'pr-opened'
+      if (!values.json) console.log(`  PR: ${url}`)
     } catch (err) {
       failed++
-      console.error(`  error: ${(err as Error).message}`)
+      result.status = 'error'
+      result.error = (err as Error).message
+      if (!values.json) console.error(`  error: ${result.error}`)
     } finally {
-      if (keep) console.log(`  kept clone at ${dir}`)
-      else await rm(dir, { recursive: true, force: true })
+      if (keep) {
+        if (!values.json) console.log(`  kept clone at ${dir}`)
+      } else await rm(dir, { recursive: true, force: true })
     }
   }
-  return failed ? 1 : 0
+  if (values.json) console.log(JSON.stringify(results))
+  if (failed) return 2
+  if (values.check && pending) return 1
+  return 0
 }
 
 if (import.meta.main) {
-  process.exit(await main(process.argv.slice(2)))
+  try {
+    process.exit(await main(process.argv.slice(2)))
+  } catch (err) {
+    console.error((err as Error).message)
+    process.exit(2)
+  }
 }

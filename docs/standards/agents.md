@@ -33,7 +33,8 @@
 ## What belongs in `## Project`
 
 - What the project is, in two sentences.
-- Commands beyond the shared contract (`check`, `test`, `test:e2e`, `build`).
+- Native commands for checks, offline tests and builds, including opt-in live verification.
+- The release procedure and any steps only the owner may perform.
 - Architecture rules that a change could break, with the reason.
 - Gotchas that cost someone an hour.
 

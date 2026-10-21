@@ -1,9 +1,9 @@
 # devkit
 
 Shared CI workflows, git hooks, templates and agent rules for
-[neoromantic](https://github.com/neoromantic)'s open-source repos.
+[neoromantic](https://github.com/neoromantic)'s public and private repos.
 
-One place for the boring parts every repo needs: CI that runs the same script names everywhere,
+One place for the boring parts every repo needs: CI that runs each ecosystem's native commands,
 secret and privacy scanning, a Renovate preset, community files and the shared block of
 `AGENTS.md`. Repos stay independent: each one gets a thin stub or a synced file, never a
 dependency on a local checkout.
@@ -23,11 +23,12 @@ and nothing here reformats a repo.
 | `scripts/privacy-scan.ts` | Finds phone numbers, home paths and your private markers; prints only `path:line` |
 | `scripts/sync.ts` | Renders managed files and the AGENTS block into every repo; `--write` opens PRs |
 | `scripts/repo-settings.ts` | Diffs GitHub repo settings (description, topics, wiki, secret scanning, private vulnerability reporting, the `main` ruleset…) against `repos.yml`; `--apply` fixes them |
+| `scripts/status.ts` | On-demand default-branch SHA, checks for that SHA and latest published stable release |
 | `repos.yml` | The repos devkit manages, their profile, description, topics and settings |
 | `agents/AGENTS.shared.md` | The shared block for each repo's `AGENTS.md` |
 | `templates/` | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml` |
 | `renovate/` | Renovate presets: `default` and `maintenance` (no majors) |
-| `docs/standards/` | README, release, Homebrew, agent-instruction and security standards |
+| `docs/standards/` | README, product content, delivery, Homebrew, agent-instruction and security standards |
 
 ## Use it in a repo
 
@@ -59,7 +60,9 @@ Scripts that don't exist are skipped.
 `ci-python.yml` inputs: `python-version` (JSON list; `""` means `.python-version`), `os`,
 `working-directory`, `ruff`, `test-command` (default `pytest -q`), `test-with` (extra packages).
 
-`hygiene.yml` inputs: `actionlint`, `zizmor`, `gitleaks`, `boundary-scan` (all on), `devkit-ref`.
+`hygiene.yml` inputs: `actionlint`, `zizmor`, `gitleaks`, `boundary-scan` (all on), `devkit-ref`,
+`runner` (JSON label array, default `["ubuntu-latest"]`), `zizmor-path` (default `.`), and
+`gitleaks-log-opts` (extra git log options/pathspecs appended after the commit range).
 
 ### Git hooks
 
@@ -77,6 +80,13 @@ remotes:
 ```
 
 and run `lefthook install` once per clone.
+
+Private repos can select `lefthook/secrets.yml` instead to reuse gitleaks without the public
+privacy scan. Keep repo-specific hooks alongside it. If some paths must never be read, exclude
+them in git pathspecs before piping a bounded patch to the scanner; a scanner allowlist only
+suppresses findings. For that case set `gitleaks: { skip: true }` locally and add a separately
+named bounded command; remote hook settings take precedence over local `run` overrides.
+For CI use `gitleaks-log-opts` pathspecs, `zizmor-path: .github` and `boundary-scan: false`.
 
 ### Privacy scan
 
@@ -116,6 +126,9 @@ bun scripts/sync.ts --only telegram-sync-cli
 bun scripts/sync.ts --write                 # one PR per repo
 bun scripts/repo-settings.ts                # settings diff
 bun scripts/repo-settings.ts --apply --only devkit
+bun scripts/sync.ts --check --json           # no PRs; exit 1 for drift or blocked/skipped work
+bun scripts/repo-settings.ts --check --json  # no GitHub writes
+bun scripts/status.ts --json                # on-demand technical observations
 ```
 
 `sync.ts` clones each repo from `repos.yml` into a temp folder and renders its managed files.
@@ -129,6 +142,32 @@ For a repo with `required_checks: [ci]` it also keeps a branch ruleset named `ma
 the default branch can't be deleted or force-pushed, and pull requests need `ci` to pass
 (not necessarily against the latest `main`). Repository admins bypass it, so a maintainer can
 still push to `main` directly. A second run after `--apply` prints `ok` for every repo.
+
+All three commands accept `--config path` and `--only a,b`. The config has the same schema as
+`repos.yml`; relative paths resolve from the current directory. Keep private inventories in the
+private repo, with only the desired `files` and `settings`; use `agents: false` to preserve its
+own instruction format. Public defaults are not merged into a supplied config. Do not publish
+private repo names, paths or operations in devkit. A private repo keeps its native CI, hooks and
+delivery procedure and opts into the shared pieces it needs.
+
+`sync` and `repo-settings` print JSON arrays with per-repo status, individual changes/diffs and
+errors. `--check` returns 0 only when everything inspected is in sync, 1 for drift, unmanaged,
+blocked or frozen work, and 2 for errors. It cannot be combined with `--write` or `--apply`.
+Without `--check`, dry-run differences remain informational. A PR opened or settings applied
+are reported as such; they are not proof that the consuming default branch is up to date.
+
+`status` reads the default branch live, then queries check runs and commit statuses for that
+exact SHA (including pagination). CI uses configured `required_checks`, or all observed checks
+when none are configured. Missing, pending and failed checks stay distinct. It also reports the
+latest published stable release's tag and URL; drafts and prereleases are excluded. Exit codes:
+0 for passed CI with an observed release, 1 for incomplete evidence, 2 for API errors. An absent
+GitHub Release does not mean a skill or web product is undelivered: its installable revision or
+production deployment is verified through its own procedure. This command measures repository
+facts, not installation, website freshness or publication results. It creates no schedules.
+
+Follow [product content](docs/standards/product-content.md) when preparing documentation and
+demos, and [release](docs/standards/release.md) for delivery evidence. Product-specific posting
+policy and operations belong outside devkit.
 
 ## Versions
 

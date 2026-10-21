@@ -203,5 +203,6 @@ describe('main ruleset', () => {
 
   test('the tap never gets required checks', () => {
     expect(repos.find((r) => r.name === 'homebrew-tap')?.required_checks).toBeUndefined()
+    expect(repos.find((r) => r.name === 'homebrew-tap')?.files['renovate.json']).toBeUndefined()
   })
 })

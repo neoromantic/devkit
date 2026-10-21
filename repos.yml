@@ -98,6 +98,8 @@ repos:
 
   homebrew-tap:
     profile: infra
+    # Formula updates belong to product release pipelines.
+    exclude: [renovate.json]
     description: "Homebrew formulae of neoromantic's tools: ai-usage"
     topics: [homebrew, homebrew-tap]
 

@@ -15,15 +15,27 @@ name: hygiene
 on:
   workflow_call:
     inputs:
+      runner:
+        description: JSON array of runner labels
+        type: string
+        default: '["ubuntu-latest"]'
       actionlint:
         type: boolean
         default: true
       zizmor:
         type: boolean
         default: true
+      zizmor-path:
+        description: Directory to audit; use .github when other directories must not be traversed
+        type: string
+        default: .
       gitleaks:
         type: boolean
         default: true
+      gitleaks-log-opts:
+        description: Additional git log options and pathspecs, appended to the commit range
+        type: string
+        default: ''
       boundary-scan:
         description: Run the devkit privacy scan (generic patterns) on added lines
         type: boolean
@@ -44,7 +56,7 @@ env:
 
 jobs:
   hygiene:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner) }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -92,19 +104,22 @@ jobs:
           ignore-empty-workdir: true
 
       - name: zizmor
-        if: inputs.zizmor && hashFiles('.github/workflows/*.yml', '.github/workflows/*.yaml', '**/action.yml', '**/action.yaml') != ''
-        run: uvx "zizmor@${ZIZMOR_VERSION}" --offline --format=github .
+        if: inputs.zizmor
+        env:
+          ZIZMOR_PATH: ${{ inputs.zizmor-path }}
+        run: uvx "zizmor@${ZIZMOR_VERSION}" --offline --format=github "$ZIZMOR_PATH"
 
       - name: gitleaks
         if: inputs.gitleaks
         env:
           RANGE: ${{ steps.range.outputs.log }}
+          GITLEAKS_LOG_OPTS: ${{ inputs.gitleaks-log-opts }}
         run: |
           curl -fsSLo gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
           mkdir -p "$RUNNER_TEMP/bin" && tar -xzf gitleaks.tar.gz -C "$RUNNER_TEMP/bin" gitleaks && rm gitleaks.tar.gz
           args=(git --redact --no-banner --verbose --exit-code 1)
-          if [ -n "$RANGE" ]; then args+=(--log-opts="$RANGE"); fi
+          if [ -n "$RANGE$GITLEAKS_LOG_OPTS" ]; then args+=(--log-opts="$RANGE $GITLEAKS_LOG_OPTS"); fi
           "$RUNNER_TEMP/bin/gitleaks" "${args[@]}" .
 
       - name: Check out devkit for the privacy scan
