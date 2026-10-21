@@ -12,7 +12,8 @@ authorise owner-only steps.
 
 ## Versions
 
-- SemVer. One source of truth per repo:
+- Versioned products use SemVer, with one source of truth per product. A web service may use
+  its deployed commit without a version or release tag:
   - Bun/TS: `version` in `package.json` (read it at runtime; never hardcode it elsewhere).
   - Python: `version` in `pyproject.toml`; update any required manifests through the local procedure.
   - Go: the git tag.
@@ -63,6 +64,7 @@ engine just to conform to shared documentation.
    for the maintainer's separate publishing process.
 3. Follow the [product content standard](product-content.md); record the verified revision and
    links. Posting accounts, queues and announcement policy stay outside product repositories.
+   Paid offers also follow [paid product readiness](paid-readiness.md).
 
 ## Releasing devkit itself
 

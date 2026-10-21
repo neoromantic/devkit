@@ -26,6 +26,7 @@ The owning project keeps the commands and product-specific details in its own do
 ## Ready for use
 
 Verify the applicable delivery channels, a clean install or user flow, documentation and demos.
+For a paid offer, also follow [paid product readiness](paid-readiness.md).
 Keep the result tied to the delivered revision with evidence such as a release URL, deployment
 URL or screenshot. Provide verified facts, source media and relevant public links to the
 maintainer's separate publishing process. Account access, posting permissions, destinations,

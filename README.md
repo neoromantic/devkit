@@ -28,7 +28,7 @@ and nothing here reformats a repo.
 | `agents/AGENTS.shared.md` | The shared block for each repo's `AGENTS.md` |
 | `templates/` | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml` |
 | `renovate/` | Renovate presets: `default` and `maintenance` (no majors) |
-| `docs/standards/` | README, product content, delivery, Homebrew, agent-instruction and security standards |
+| `docs/standards/` | README, product content, paid readiness, delivery, Homebrew, agent-instruction and security standards |
 
 ## Use it in a repo
 
@@ -168,6 +168,7 @@ facts, not installation, website freshness or publication results. It creates no
 Follow [product content](docs/standards/product-content.md) when preparing documentation and
 demos, and [release](docs/standards/release.md) for delivery evidence. Product-specific posting
 policy and operations belong outside devkit.
+Paid offers also follow [paid readiness](docs/standards/paid-readiness.md).
 
 ## Versions
 
