@@ -81,6 +81,7 @@ repos:
       - transcription
       - voice-to-text
       - sergeybaus-oss
+    required_checks: [ci]
 
   ornament-skill:
     profile: skill
