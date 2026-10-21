@@ -5,6 +5,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   workflow_dispatch:
   schedule:
     - cron: "0 4 * * 1"
@@ -13,7 +14,7 @@ permissions: {}
 
 concurrency:
   group: self-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   bun:
@@ -38,7 +39,8 @@ jobs:
       contents: read
 
   templates:
-    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft != true
+    runs-on: ${{ fromJSON('{"true":"oss-linux","false":"ubuntu-latest"}')[format('{0}', vars.CI_SELF_HOSTED == 'true' && github.ref == 'refs/heads/main')] }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -70,8 +72,8 @@ jobs:
   # The one required check for the branch ruleset.
   ci:
     needs: [bun, python-fixture, hygiene, templates]
-    if: always()
-    runs-on: ubuntu-latest
+    if: always() && github.event.pull_request.draft != true
+    runs-on: ${{ fromJSON('{"true":"oss-linux","false":"ubuntu-latest"}')[format('{0}', vars.CI_SELF_HOSTED == 'true' && github.ref == 'refs/heads/main')] }}
     permissions: {}
     steps:
       - name: All jobs passed

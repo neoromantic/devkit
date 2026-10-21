@@ -45,14 +45,15 @@ permissions: {}
 
 jobs:
   python:
+    if: github.event.pull_request.draft != true
     name: python ${{ matrix.python-version }} (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON(format('{{"true":"oss-linux","false":"{0}"}}', matrix.os))[format('{0}', vars.CI_SELF_HOSTED == 'true' && github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest')] }}
     timeout-minutes: 20
     permissions:
       contents: read
     concurrency:
       group: devkit-ci-python-${{ github.workflow }}-${{ github.ref }}-${{ inputs.working-directory }}-${{ matrix.os }}-${{ matrix.python-version }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:

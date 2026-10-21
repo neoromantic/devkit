@@ -57,6 +57,12 @@ jobs:
 `bun-version` (default: `.bun-version`, then `packageManager` in `package.json`), `canary`, `e2e`.
 Scripts that don't exist are skipped.
 
+Set the repository variable `CI_SELF_HOSTED` to `true` to run `main` Linux builds on
+an isolated runner with the `oss-linux` label. PRs and other branches use GitHub-hosted runners, as do repositories
+without the variable. Native macOS and Windows jobs keep their selected OS. An explicit
+non-default `hygiene.runner` also stays unchanged. Draft PRs skip work; marking them ready
+starts CI, and newer commits cancel superseded checks.
+
 `ci-python.yml` inputs: `python-version` (JSON list; `""` means `.python-version`), `os`,
 `working-directory`, `ruff`, `test-command` (default `pytest -q`), `test-with` (extra packages).
 
