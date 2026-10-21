@@ -56,13 +56,14 @@ env:
 
 jobs:
   hygiene:
-    runs-on: ${{ fromJSON(inputs.runner) }}
+    if: github.event.pull_request.draft != true
+    runs-on: ${{ fromJSON(format('{{"true":["oss-linux"],"false":{0}}}', inputs.runner))[format('{0}', vars.CI_SELF_HOSTED == 'true' && github.ref == 'refs/heads/main' && inputs.runner == '["ubuntu-latest"]')] }}
     timeout-minutes: 15
     permissions:
       contents: read
     concurrency:
       group: devkit-hygiene-${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
