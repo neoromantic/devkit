@@ -2,7 +2,11 @@
 #
 # scripts/sync.ts renders `files` (from templates/) and the AGENTS block into each repo.
 # scripts/repo-settings.ts compares GitHub settings with `settings`, `description`,
-# `homepage` and `topics` below. A field that is left out is not managed.
+# `homepage`, `topics` and `required_checks` below. A field that is left out is not managed.
+#
+# `required_checks` manages a branch ruleset named "main (devkit)": the default branch
+# can't be deleted or force-pushed and needs these checks to pass; repository admins
+# bypass it. homebrew-tap has no required checks on purpose (see docs/standards/homebrew.md).
 #
 # Keys under `repos` are the GitHub repo names under `owner`, which are also the
 # folder names of local checkouts.
@@ -58,6 +62,7 @@ repos:
     profile: bun
     description: Agent-friendly Telegram CLI with a local cache, a read-only sync daemon and full MTProto API access.
     topics: [telegram, cli, bun, mtproto, sqlite, sergeybaus-oss]
+    required_checks: [ci]
 
   telesec:
     profile: python
@@ -81,12 +86,14 @@ repos:
     profile: skill
     description: "Claude Code skill for the Ornament Health API: read profiles, lab biomarkers, history, abnormal results, and health-condition scores."
     topics: [claude-code, agent-skills, ornament-health, biomarkers, sergeybaus-oss]
+    required_checks: [ci]
 
   evals:
     profile: bun
     maintenance: true
     description: Pragmatic eval framework for LLM features. Runs eval files as Bun tests with scorers, baselines, and reporting.
     topics: [llm, evals, bun, testing]
+    required_checks: [ci]
 
   homebrew-tap:
     profile: infra
@@ -105,3 +112,4 @@ repos:
     description: Local usage collector for Codex, Claude, Grok, and Hermes.
     homepage: https://au.sergeybaus.com
     topics: [claude-code, codex, cli, go, sergeybaus-oss]
+    required_checks: [ci]

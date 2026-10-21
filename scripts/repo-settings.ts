@@ -7,8 +7,9 @@
  *   options: --only a,b   --include-frozen (also apply to frozen repos)
  *
  * Managed: description, homepage, topics, has_wiki, has_projects,
- * delete_branch_on_merge, secret scanning and push protection, and private
- * vulnerability reporting (SECURITY.md points reporters there).
+ * delete_branch_on_merge, secret scanning and push protection, private
+ * vulnerability reporting (SECURITY.md points reporters there), and the
+ * `main (devkit)` branch ruleset for repos with `required_checks`.
  */
 import { gh, isFrozen, loadReposFile, parseOnly, type Repo, resolveRepos, selectRepos } from './lib/repos'
 
@@ -28,6 +29,29 @@ export interface SettingDiff {
   field: keyof RepoState
   current: RepoState[keyof RepoState]
   desired: RepoState[keyof RepoState]
+}
+
+/** The branch ruleset devkit owns in a repo, found by this name. */
+export const RULESET_NAME = 'main (devkit)'
+
+export interface Ruleset {
+  name: string
+  target: string
+  enforcement: string
+  conditions: { ref_name: { include: string[]; exclude: string[] } }
+  rules: { type: string; parameters?: Record<string, unknown> }[]
+  bypass_actors: { actor_type: string; actor_id: number | null; bypass_mode: string }[]
+}
+
+export interface RulesetDiff {
+  field: string
+  current: unknown
+  desired: unknown
+}
+
+interface StatusChecks {
+  strict_required_status_checks_policy?: boolean
+  required_status_checks?: { context: string; integration_id?: number }[]
 }
 
 interface GitHubRepo {
@@ -63,6 +87,88 @@ export function desiredState(repo: Repo): Partial<RepoState> {
   if (repo.homepage !== undefined) want.homepage = repo.homepage
   if (repo.topics !== undefined) want.topics = repo.topics
   return want
+}
+
+/**
+ * The ruleset for `required_checks`: the default branch can't be deleted or
+ * force-pushed, and needs the checks to pass (not necessarily on the latest
+ * main). Repository admins bypass it, so maintainers can still push directly.
+ */
+export function desiredRuleset(checks: string[]): Ruleset {
+  const rules: Ruleset['rules'] = [{ type: 'deletion' }, { type: 'non_fast_forward' }]
+  if (checks.length) {
+    rules.push({
+      type: 'required_status_checks',
+      parameters: {
+        strict_required_status_checks_policy: false,
+        required_status_checks: checks.map((context) => ({ context })),
+      },
+    })
+  }
+  return {
+    name: RULESET_NAME,
+    target: 'branch',
+    enforcement: 'active',
+    conditions: { ref_name: { include: ['~DEFAULT_BRANCH'], exclude: [] } },
+    rules,
+    bypass_actors: [{ actor_type: 'RepositoryRole', actor_id: 5, bypass_mode: 'always' }],
+  }
+}
+
+interface GitHubRuleset {
+  name: string
+  target?: string
+  enforcement: string
+  conditions?: { ref_name?: { include?: string[]; exclude?: string[] } } | null
+  rules?: { type: string; parameters?: Record<string, unknown> }[]
+  bypass_actors?: { actor_type: string; actor_id: number | null; bypass_mode: string }[]
+}
+
+export function rulesetFromApi(api: GitHubRuleset): Ruleset {
+  return {
+    name: api.name,
+    target: api.target ?? 'branch',
+    enforcement: api.enforcement,
+    conditions: {
+      ref_name: { include: api.conditions?.ref_name?.include ?? [], exclude: api.conditions?.ref_name?.exclude ?? [] },
+    },
+    rules: api.rules ?? [],
+    bypass_actors: api.bypass_actors ?? [],
+  }
+}
+
+/** The parts of a ruleset devkit compares, as plain values. */
+function rulesetView(r: Ruleset): Record<string, string | string[]> {
+  const checks = r.rules.find((x) => x.type === 'required_status_checks')?.parameters as StatusChecks | undefined
+  return {
+    target: r.target,
+    enforcement: r.enforcement,
+    branches: [...r.conditions.ref_name.include, ...r.conditions.ref_name.exclude.map((b) => `!${b}`)],
+    rules: r.rules.map((x) => x.type),
+    required_checks: (checks?.required_status_checks ?? []).map((c) =>
+      c.integration_id ? `${c.context}@${c.integration_id}` : c.context,
+    ),
+    strict: String(checks?.strict_required_status_checks_policy ?? false),
+    bypass: r.bypass_actors.map((a) => `${a.actor_type}:${a.actor_id ?? ''}:${a.bypass_mode}`),
+  }
+}
+
+/** Differences between the current ruleset (null when missing) and the desired one. */
+export function diffRuleset(current: Ruleset | null, desired: Ruleset): RulesetDiff[] {
+  if (!current) return [{ field: 'ruleset', current: null, desired: desired.name }]
+  const now = rulesetView(current)
+  const want = rulesetView(desired)
+  return Object.keys(want)
+    .filter((field) => !same(now[field], want[field]))
+    .map((field) => ({ field: `ruleset.${field}`, current: now[field], desired: want[field] }))
+}
+
+/** One ruleset diff line; a missing ruleset lists what will be created. */
+export function formatRulesetDiff(d: RulesetDiff, desired: Ruleset): string {
+  if (d.field !== 'ruleset') return formatDiff(d)
+  const view = rulesetView(desired)
+  const checks = view.required_checks?.length ? `, required checks ${show(view.required_checks)}` : ''
+  return `ruleset "${desired.name}": missing -> rules ${show(view.rules)}${checks}, bypass ${show(view.bypass)}`
 }
 
 function same(a: unknown, b: unknown): boolean {
@@ -110,7 +216,7 @@ function show(v: unknown): string {
  * One diff line. Lists (topics) show only what is added and removed, so a
  * different order on GitHub never reads as a change.
  */
-export function formatDiff(d: SettingDiff): string {
+export function formatDiff(d: SettingDiff | RulesetDiff): string {
   if (Array.isArray(d.current) && Array.isArray(d.desired)) {
     const now = d.current as string[]
     const want = d.desired as string[]
@@ -120,6 +226,17 @@ export function formatDiff(d: SettingDiff): string {
     return `${d.field}: ${parts.filter(Boolean).join(' ')}`
   }
   return `${d.field}: ${show(d.current)} -> ${show(d.desired)}`
+}
+
+/** The repo's own ruleset named RULESET_NAME, or null. Rulesets inherited from an org are ignored. */
+function fetchRuleset(fullName: string): { id: number; body: Ruleset } | null {
+  const list = JSON.parse(gh(['api', `repos/${fullName}/rulesets?includes_parents=false&per_page=100`])) as {
+    id: number
+    name: string
+  }[]
+  const hit = list.find((r) => r.name === RULESET_NAME)
+  if (!hit) return null
+  return { id: hit.id, body: rulesetFromApi(JSON.parse(gh(['api', `repos/${fullName}/rulesets/${hit.id}`])) as GitHubRuleset) }
 }
 
 export async function main(argv: string[]): Promise<number> {
@@ -135,22 +252,27 @@ export async function main(argv: string[]): Promise<number> {
 
   for (const repo of repos) {
     let current: RepoState
+    let ruleset: { id: number; body: Ruleset } | null = null
     try {
       const pvr = JSON.parse(gh(['api', `repos/${repo.fullName}/private-vulnerability-reporting`])) as { enabled: boolean }
       current = stateFromApi(JSON.parse(gh(['api', `repos/${repo.fullName}`])) as GitHubRepo, pvr.enabled)
+      if (repo.required_checks !== undefined) ruleset = fetchRuleset(repo.fullName)
     } catch (err) {
       console.error(`${repo.fullName}: ${(err as Error).message}`)
       failed++
       continue
     }
     const diffs = diffSettings(current, desiredState(repo))
+    const wantRuleset = repo.required_checks === undefined ? null : desiredRuleset(repo.required_checks)
+    const rulesetDiffs = wantRuleset ? diffRuleset(ruleset?.body ?? null, wantRuleset) : []
     const frozen = isFrozen(repo)
-    if (diffs.length === 0) {
+    if (diffs.length === 0 && rulesetDiffs.length === 0) {
       console.log(`${repo.fullName}: ok`)
       continue
     }
     console.log(`${repo.fullName}:${frozen ? ' (frozen)' : ''}`)
     for (const d of diffs) console.log(`  ${formatDiff(d)}`)
+    if (wantRuleset) for (const d of rulesetDiffs) console.log(`  ${formatRulesetDiff(d, wantRuleset)}`)
     if (!apply) {
       pending++
       continue
@@ -167,6 +289,10 @@ export async function main(argv: string[]): Promise<number> {
       if (topics) gh(['api', '-X', 'PUT', `repos/${repo.fullName}/topics`, '--input', '-'], JSON.stringify({ names: topics }))
       if (privateVulnerabilityReporting !== null) {
         gh(['api', '-X', privateVulnerabilityReporting ? 'PUT' : 'DELETE', `repos/${repo.fullName}/private-vulnerability-reporting`])
+      }
+      if (wantRuleset && rulesetDiffs.length) {
+        const path = ruleset ? `repos/${repo.fullName}/rulesets/${ruleset.id}` : `repos/${repo.fullName}/rulesets`
+        gh(['api', '-X', ruleset ? 'PUT' : 'POST', path, '--input', '-'], JSON.stringify(wantRuleset))
       }
       console.log('  applied')
     } catch (err) {

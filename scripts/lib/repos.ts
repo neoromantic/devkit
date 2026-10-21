@@ -24,6 +24,8 @@ export interface RepoEntry {
   agents?: boolean
   exclude?: string[]
   settings?: Settings
+  /** Status checks the `main (devkit)` branch ruleset requires. Left out: no ruleset is managed. */
+  required_checks?: string[]
 }
 
 export interface ReposFile {

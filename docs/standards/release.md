@@ -20,6 +20,9 @@
   Upload assets before publishing: immutable releases lock assets at publish time.
 - Repos with an existing tag-driven pipeline may keep it, as long as the result is the same:
   a published release with its assets and notes.
+- In a repo whose ruleset requires `ci` (`required_checks` in `repos.yml`), a Release PR opened
+  with the default `GITHUB_TOKEN` starts no workflows, so `ci` never reports on it. Merge it as
+  an admin (the ruleset lets admins bypass) or have release-please use a GitHub App token.
 
 ## CHANGELOG
 

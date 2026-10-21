@@ -15,6 +15,7 @@ Git history is public too: a leak needs a fix commit, and a leaked secret needs 
 | Pull request and push | gitleaks on the new commits, privacy scan (generic patterns) on added lines | `hygiene.yml` |
 | Weekly / manual | gitleaks on the full history | `hygiene.yml` on `schedule` or `workflow_dispatch` |
 | GitHub | secret scanning and push protection | `repo-settings.ts` |
+| GitHub | `main (devkit)` ruleset: no deletion or force-push of `main`, `ci` required, admins bypass | `repo-settings.ts` (`required_checks`) |
 | Reports | private vulnerability reporting | `SECURITY.md` |
 
 ## Privacy scan

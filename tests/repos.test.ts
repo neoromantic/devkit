@@ -2,7 +2,19 @@ import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { isManaged, render, templateVars } from '../scripts/lib/managed'
 import { AGENTS_BLOCK_PATH, isFrozen, loadReposFile, resolveRepos, TEMPLATES_DIR } from '../scripts/lib/repos'
-import { applyPlan, desiredState, diffSettings, formatDiff, type RepoState, stateFromApi } from '../scripts/repo-settings'
+import {
+  applyPlan,
+  desiredRuleset,
+  desiredState,
+  diffRuleset,
+  diffSettings,
+  formatDiff,
+  formatRulesetDiff,
+  RULESET_NAME,
+  type RepoState,
+  rulesetFromApi,
+  stateFromApi,
+} from '../scripts/repo-settings'
 
 const repos = resolveRepos(await loadReposFile())
 
@@ -107,5 +119,89 @@ describe('repo-settings', () => {
   test('desired state merges defaults with repo fields', () => {
     const devkit = repos.find((r) => r.name === 'devkit')
     expect(devkit && desiredState(devkit)).toMatchObject({ has_wiki: false, delete_branch_on_merge: true })
+  })
+})
+
+describe('main ruleset', () => {
+  const want = desiredRuleset(['ci'])
+
+  // The shape GET /repos/{owner}/{repo}/rulesets/{id} returns after --apply created it.
+  const applied = {
+    id: 1,
+    name: RULESET_NAME,
+    target: 'branch',
+    source_type: 'Repository',
+    enforcement: 'active',
+    conditions: { ref_name: { exclude: [], include: ['~DEFAULT_BRANCH'] } },
+    rules: [
+      { type: 'non_fast_forward' },
+      { type: 'deletion' },
+      {
+        type: 'required_status_checks',
+        parameters: {
+          do_not_enforce_on_create: false,
+          strict_required_status_checks_policy: false,
+          required_status_checks: [{ context: 'ci' }],
+        },
+      },
+    ],
+    bypass_actors: [{ actor_id: 5, actor_type: 'RepositoryRole', bypass_mode: 'always' }],
+  }
+
+  test('requires the checks on the default branch, admins bypass', () => {
+    expect(want).toEqual({
+      name: 'main (devkit)',
+      target: 'branch',
+      enforcement: 'active',
+      conditions: { ref_name: { include: ['~DEFAULT_BRANCH'], exclude: [] } },
+      rules: [
+        { type: 'deletion' },
+        { type: 'non_fast_forward' },
+        {
+          type: 'required_status_checks',
+          parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: 'ci' }] },
+        },
+      ],
+      bypass_actors: [{ actor_type: 'RepositoryRole', actor_id: 5, bypass_mode: 'always' }],
+    })
+    expect(desiredRuleset([]).rules.map((r) => r.type)).toEqual(['deletion', 'non_fast_forward'])
+  })
+
+  test('a missing ruleset reads as one line that lists what --apply creates', () => {
+    const diffs = diffRuleset(null, want)
+    expect(diffs).toHaveLength(1)
+    const [d] = diffs
+    expect(d && formatRulesetDiff(d, want)).toBe(
+      'ruleset "main (devkit)": missing -> rules [deletion, non_fast_forward, required_status_checks], required checks [ci], bypass [RepositoryRole:5:always]',
+    )
+  })
+
+  test('the ruleset GitHub returns after apply is ok, whatever the order of rules', () => {
+    expect(diffRuleset(rulesetFromApi(applied), want)).toEqual([])
+  })
+
+  test('a changed check, strict mode or bypass shows up', () => {
+    const drifted = rulesetFromApi({
+      ...applied,
+      rules: [
+        { type: 'deletion' },
+        {
+          type: 'required_status_checks',
+          parameters: { strict_required_status_checks_policy: true, required_status_checks: [{ context: 'build' }] },
+        },
+      ],
+      bypass_actors: [],
+    })
+    const lines = diffRuleset(drifted, want).map((d) => formatRulesetDiff(d, want))
+    expect(lines).toEqual([
+      'ruleset.rules: +[non_fast_forward]',
+      'ruleset.required_checks: +[ci] -[build]',
+      'ruleset.strict: "true" -> "false"',
+      'ruleset.bypass: +[RepositoryRole:5:always]',
+    ])
+  })
+
+  test('the tap never gets required checks', () => {
+    expect(repos.find((r) => r.name === 'homebrew-tap')?.required_checks).toBeUndefined()
   })
 })

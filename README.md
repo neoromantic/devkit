@@ -22,7 +22,7 @@ and nothing here reformats a repo.
 | `lefthook/lefthook.yml` | Shared pre-commit hooks: gitleaks and the privacy scan |
 | `scripts/privacy-scan.ts` | Finds phone numbers, home paths and your private markers; prints only `path:line` |
 | `scripts/sync.ts` | Renders managed files and the AGENTS block into every repo; `--write` opens PRs |
-| `scripts/repo-settings.ts` | Diffs GitHub repo settings (description, topics, wiki, secret scanning, private vulnerability reporting…) against `repos.yml`; `--apply` fixes them |
+| `scripts/repo-settings.ts` | Diffs GitHub repo settings (description, topics, wiki, secret scanning, private vulnerability reporting, the `main` ruleset…) against `repos.yml`; `--apply` fixes them |
 | `repos.yml` | The repos devkit manages, their profile, description, topics and settings |
 | `agents/AGENTS.shared.md` | The shared block for each repo's `AGENTS.md` |
 | `templates/` | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml` |
@@ -35,7 +35,8 @@ and nothing here reformats a repo.
 
 Copy `templates/ci.bun.yml` or `templates/ci.python.yml` to `.github/workflows/ci.yml` (or let
 `sync.ts` do it). The stub calls the reusable workflows at `@v1` and ends with a gate job named
-`ci`, the one check to require in the branch ruleset:
+`ci`, the one check to require in the branch ruleset (`required_checks: [ci]` in `repos.yml`,
+see [Maintain the fleet](#maintain-the-fleet)):
 
 ```yaml
 jobs:
@@ -122,6 +123,12 @@ Files with the `managed by devkit` mark are updated; existing files without it a
 unless you pass `--adopt`. It also inserts or refreshes the `<!-- devkit:agents v1 -->` block in
 `AGENTS.md` and creates `CLAUDE.md` as `@AGENTS.md` when missing. Repos with `frozen_until` in
 the future are skipped.
+
+`repo-settings.ts` diffs the fields of `repos.yml`; a field that is left out is not managed.
+For a repo with `required_checks: [ci]` it also keeps a branch ruleset named `main (devkit)`:
+the default branch can't be deleted or force-pushed, and pull requests need `ci` to pass
+(not necessarily against the latest `main`). Repository admins bypass it, so a maintainer can
+still push to `main` directly. A second run after `--apply` prints `ok` for every repo.
 
 ## Versions
 
