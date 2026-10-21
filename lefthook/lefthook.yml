@@ -1,7 +1,7 @@
 # managed by devkit v1: shared git hooks, pulled into each repo through lefthook `remotes`.
 # Needs gitleaks and Bun on PATH. Private markers: ~/.config/devkit/private-markers (mode 0600).
 extends:
-  - lefthook/secrets.yml
+  - secrets.yml
 pre-commit:
   parallel: true
   scripts:
