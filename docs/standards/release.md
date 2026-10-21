@@ -13,6 +13,8 @@
 
 ## Engine
 
+Until release-please is configured, follow the repo's documented release procedure.
+
 - Default: [release-please](https://github.com/googleapis/release-please) in manifest mode
   (`release-please-config.json` + `.release-please-manifest.json`). Merging the Release PR
   creates the tag and a **draft** release (`"draft": true`, `"force-tag-creation": true`).
@@ -20,9 +22,9 @@
   Upload assets before publishing: immutable releases lock assets at publish time.
 - Repos with an existing tag-driven pipeline may keep it, as long as the result is the same:
   a published release with its assets and notes.
-- In a repo whose ruleset requires `ci` (`required_checks` in `repos.yml`), a Release PR opened
-  with the default `GITHUB_TOKEN` starts no workflows, so `ci` never reports on it. Merge it as
-  an admin (the ruleset lets admins bypass) or have release-please use a GitHub App token.
+- A Release PR opened or updated with `GITHUB_TOKEN` needs a maintainer to approve its workflow
+  runs before required `ci` can pass. For automatic runs, use a GitHub App token; see
+  [GitHub's trigger rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow).
 
 ## CHANGELOG
 
