@@ -69,7 +69,7 @@ export async function main(argv: string[]): Promise<number> {
         .sort((a, b) => b.published_at.localeCompare(a.published_at))
       const release = published[0]
       if (release) result.release = { tag: release.tag_name, url: release.html_url }
-      if (result.ci !== 'passed' || result.release === null) incomplete++
+      if (result.ci !== 'passed') incomplete++
     } catch (err) {
       result.error = (err as Error).message
       failed++

@@ -116,7 +116,7 @@ describe('read-only CLI modes', () => {
     { command: 'status', mode: 'missing', config: 'fleet.yml', code: 1, status: 'missing' },
     { command: 'status', mode: 'missing-required', config: 'fleet.yml', code: 1, status: 'missing' },
     { command: 'status', mode: 'pending', config: 'fleet.yml', code: 1, status: 'pending' },
-    { command: 'status', mode: 'no-release', config: 'fleet.yml', code: 1, status: 'passed' },
+    { command: 'status', mode: 'no-release', config: 'fleet.yml', code: 0, status: 'passed' },
     { command: 'status', mode: 'error', config: 'fleet.yml', code: 2, status: 'unknown' },
   ]) {
     test(`${scenario.command}: ${scenario.mode} (${scenario.config})`, async () => {
@@ -137,7 +137,7 @@ describe('read-only CLI modes', () => {
         expect(rows[0].ci).toBe(scenario.status)
         if (scenario.mode !== 'error') expect(rows[0].sha).toBe(sha)
         if (scenario.mode === 'no-release') expect(rows[0].release).toBeNull()
-        if (scenario.code === 0) expect(rows[0].release.tag).toBe('v1.0.0')
+        else if (scenario.code === 0) expect(rows[0].release.tag).toBe('v1.0.0')
         if (scenario.mode === 'legacy') expect(rows[0].checks).toHaveLength(1)
         if (scenario.mode === 'missing-required') expect(rows[0].missing_checks).toEqual(['ci'])
       } else expect(rows[0].status).toBe(scenario.status)

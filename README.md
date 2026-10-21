@@ -160,7 +160,8 @@ are reported as such; they are not proof that the consuming default branch is up
 exact SHA (including pagination). CI uses configured `required_checks`, or all observed checks
 when none are configured. Missing, pending and failed checks stay distinct. It also reports the
 latest published stable release's tag and URL; drafts and prereleases are excluded. Exit codes:
-0 for passed CI with an observed release, 1 for incomplete evidence, 2 for API errors. An absent
+0 for passed CI, 1 for missing, pending or failed CI, 2 for API errors. Release observations do
+not change the exit code. An absent
 GitHub Release does not mean a skill or web product is undelivered: its installable revision or
 production deployment is verified through its own procedure. This command measures repository
 facts, not installation, website freshness or publication results. It creates no schedules.
