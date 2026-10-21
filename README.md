@@ -63,6 +63,9 @@ without the variable. Native macOS and Windows jobs keep their selected OS. An e
 non-default `hygiene.runner` also stays unchanged. Draft PRs skip work; marking them ready
 starts CI, and newer commits cancel superseded checks.
 
+`ci-bun` and `ci-python` point `TMPDIR` at the runner's temp dir, so test databases and other
+temp files stay out of `/tmp`; on the `oss-linux` runners that dir is tmpfs and `/tmp` is on disk.
+
 Self-hosted Python jobs retain uv downloads in `runner.tool_cache/uv`; GitHub-hosted
 Python jobs use the Actions cache. Repo-owned jobs keep their own cache settings.
 Native macOS/Windows checks, Homebrew jobs and publishing workflows can remain
