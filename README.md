@@ -63,6 +63,15 @@ without the variable. Native macOS and Windows jobs keep their selected OS. An e
 non-default `hygiene.runner` also stays unchanged. Draft PRs skip work; marking them ready
 starts CI, and newer commits cancel superseded checks.
 
+Self-hosted Python jobs retain uv downloads in `runner.tool_cache/uv`; GitHub-hosted
+Python jobs use the Actions cache. Repo-owned jobs keep their own cache settings.
+Native macOS/Windows checks, Homebrew jobs and publishing workflows can remain
+GitHub-hosted; the Linux opt-in does not move those jobs.
+
+Validate changes with targeted local checks and builds. Do not wait for the full
+GitHub CI run unless its result is needed for the task. Required checks still gate
+merges; use auto-merge where available and report any pending checks.
+
 `ci-python.yml` inputs: `python-version` (JSON list; `""` means `.python-version`), `os`,
 `working-directory`, `ruff`, `test-command` (default `pytest -q`), `test-with` (extra packages).
 
