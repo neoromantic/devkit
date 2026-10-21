@@ -61,6 +61,7 @@ repos:
   telegram-sync-cli:
     profile: bun
     description: Agent-friendly Telegram CLI with a local cache, a read-only sync daemon and full MTProto API access.
+    homepage: https://tg.sergeybaus.com
     topics: [telegram, cli, bun, mtproto, sqlite, sergeybaus-oss]
     required_checks: [ci]
 
