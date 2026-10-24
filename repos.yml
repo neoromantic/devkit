@@ -117,3 +117,12 @@ repos:
     homepage: https://au.sergeybaus.com
     topics: [claude-code, codex, cli, go, sergeybaus-oss]
     required_checks: [ci]
+
+  bb-plugin-provider-retry-advanced:
+    profile: bun
+    description: "BB plugin: provider retry plus automatic resume after lost connectivity."
+    topics: [bb, bb-plugin, bun, sergeybaus-oss]
+    # Keeps the repo's current private vulnerability reporting setting.
+    settings:
+      private_vulnerability_reporting: false
+    required_checks: [ci]
