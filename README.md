@@ -65,6 +65,8 @@ starts CI, and newer commits cancel superseded checks.
 
 `ci-bun` and `ci-python` point `TMPDIR` at the runner's temp dir, so test databases and other
 temp files stay out of `/tmp`; on the `oss-linux` runners that dir is tmpfs and `/tmp` is on disk.
+On `oss-linux`, `hygiene` also installs its Bun there, so it never replaces the shared
+`~/.bun/bin/bun` that a `ci-bun` job may still be running.
 
 Self-hosted Python jobs retain uv downloads in `runner.tool_cache/uv`; GitHub-hosted
 Python jobs use the Actions cache. Repo-owned jobs keep their own cache settings.
