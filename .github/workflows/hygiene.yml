@@ -132,8 +132,12 @@ jobs:
           path: .devkit-scan
           persist-credentials: false
 
+      # On Linux and macOS setup-bun installs into $HOME/.bun/bin. A job-private HOME keeps it from
+      # replacing the shared ~/.bun/bin/bun on self-hosted runners while another job's bun still runs.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         if: inputs.boundary-scan && steps.range.outputs.diff != ''
+        env:
+          HOME: ${{ runner.temp }}
         with:
           bun-version: 1.4.2
           no-cache: true
