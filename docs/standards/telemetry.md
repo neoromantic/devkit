@@ -60,7 +60,7 @@ User-Agent: devkit-telemetry/1 (<product>/<version>)
 - The project key is PostHog's public, write-only key; it is a constant in each client.
 - `usage.sergeybaus.com/i/*` is a plain Vercel rewrite to `us.i.posthog.com/i/*`. PostHog sees
   the client's IP address and derives the country from it, as it does for the websites.
-- `$process_person_profile: false` keeps events anonymous in PostHog (no person profiles).
+- `$process_person_profile: false` keeps PostHog from making person profiles out of the events.
 - Timeout 3 seconds for the whole request, one attempt, no retries, no queue on disk. The
   response is ignored. Proxy settings come from the environment (`HTTPS_PROXY`). Python's
   `urllib` applies the timeout per socket operation; its send thread never holds the process.

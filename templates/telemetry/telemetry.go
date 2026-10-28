@@ -1,6 +1,6 @@
 // managed by devkit v1 — change it in neoromantic/devkit templates/telemetry/, not here. Spec: https://github.com/neoromantic/devkit/blob/main/docs/standards/telemetry.md
 
-// Package telemetry sends anonymous usage events (starts, features, errors) to PostHog through
+// Package telemetry sends usage events (starts, features, errors) to PostHog through
 // usage.sergeybaus.com. It uses only the standard library, swallows every error, prints nothing
 // but the notice and debug output, and sends in the background. A disabled client writes
 // nothing to disk and opens no connection.
@@ -450,7 +450,7 @@ func Capture(event string, props map[string]any, distinctID string, o Options) {
 	}
 	osName := map[string]string{"darwin": "macOS", "windows": "Windows", "linux": "Linux"}[runtime.GOOS]
 	p := map[string]any{
-		"$process_person_profile": false, // anonymous events, no person profiles
+		"$process_person_profile": false, // no person profiles in PostHog
 		"$lib":                    "devkit-telemetry",
 		"$lib_version":            "1",
 		"product":                 o.Product,
