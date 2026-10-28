@@ -438,9 +438,9 @@ class ErrorTests(Base):
 
     def test_scrubbing_rules_shared_with_the_other_clients(self):
         cases = [
-            ("/Users/Ann", ("ann",), "read /users/ann/x and /Users/annabel/y as ANN",
-             "read ~/x and /Users/annabel/y as <user>"),
-            ("C:\\Users\\ann", ("ann",), "C:\\Users\\Ann\\a and C:/Users/ann/b",
+            ("/Users/Ann", ("ann",), "read /users/ann/x and /Users/annabel/y as ANN", # privacy-scan:allow
+             "read ~/x and /Users/annabel/y as <user>"), # privacy-scan:allow
+            ("C:\\Users\\ann", ("ann",), "C:\\Users\\Ann\\a and C:/Users/ann/b", # privacy-scan:allow
              "~\\a and ~/b"),
             ("/home/user", ("user", "user"), "user wrote to /home/user/z",
              "<user> wrote to ~/z"),

@@ -389,8 +389,8 @@ describe('events', () => {
 
   test('scrubbing: one pass, any case, whole words only, both slash forms', async () => {
     const cases: [Env, string, string][] = [
-      [{ HOME: '/Users/Ann', USER: 'ann' }, 'read /users/ann/x and /Users/annabel/y as ANN', 'read ~/x and /Users/annabel/y as <user>'],
-      [{ HOME: 'C:\\Users\\ann', USERNAME: 'ann' }, 'C:\\Users\\Ann\\a and C:/Users/ann/b', '~\\a and ~/b'],
+      [{ HOME: '/Users/Ann', USER: 'ann' }, 'read /users/ann/x and /Users/annabel/y as ANN', 'read ~/x and /Users/annabel/y as <user>'], // privacy-scan:allow
+      [{ HOME: 'C:\\Users\\ann', USERNAME: 'ann' }, 'C:\\Users\\Ann\\a and C:/Users/ann/b', '~\\a and ~/b'], // privacy-scan:allow
       [{ HOME: '/home/user', USER: 'user', LOGNAME: 'user' }, 'user wrote to /home/user/z', '<user> wrote to ~/z'],
       [{ HOME: '/home/annexample', LOGNAME: 'ann' }, 'ann and annexample annotate', '<user> and <user> annotate'],
       [{ HOME: '/', USER: 'a' }, ' a / b ', 'a / b'],

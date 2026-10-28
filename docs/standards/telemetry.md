@@ -211,7 +211,7 @@ const t = createTelemetry({
   product: 'telegram-sync-cli',
   version: '0.4.0',
   envPrefix: 'TELEGRAM_SYNC_CLI',   // reads TELEGRAM_SYNC_CLI_TELEMETRY
-  stateDir: '/Users/ann/.telegram-sync-cli',
+  stateDir: join(homedir(), '.telegram-sync-cli'),
   channel: 'homebrew',
   mode: undefined,                   // or 'scheduled' | 'daemon' | 'app' | 'plugin' | 'server' …
   features: ['chats list', 'sync'],  // anything else becomes "other"

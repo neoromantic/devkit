@@ -521,8 +521,8 @@ func TestErrors(t *testing.T) {
 
 	equal(t, "home and user", scrub(fmt.Sprintf("open %s/notes.txt: not allowed for ann", home)), "open ~/notes.txt: not allowed for <user>")
 	for _, tc := range []struct{ home, user, in, want string }{
-		{"/Users/Ann", "ann", "read /users/ann/x and /Users/annabel/y as ANN", "read ~/x and /Users/annabel/y as <user>"},
-		{`C:\Users\ann`, "ann", `C:\Users\Ann\a and C:/Users/ann/b`, `~\a and ~/b`},
+		{"/Users/Ann", "ann", "read /users/ann/x and /Users/annabel/y as ANN", "read ~/x and /Users/annabel/y as <user>"}, // privacy-scan:allow
+		{`C:\Users\ann`, "ann", `C:\Users\Ann\a and C:/Users/ann/b`, `~\a and ~/b`},                                       // privacy-scan:allow
 		{"/home/user", "user", "user wrote to /home/user/z", "<user> wrote to ~/z"},
 		{"/home/annexample", "ann", "ann and annexample annotate", "<user> and <user> annotate"},
 		{"/", "a", " a / b ", "a / b"},
