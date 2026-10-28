@@ -328,7 +328,7 @@ describe('events', () => {
 
   test('app_installed goes out once, with the first event of the install', async () => {
     const dir = seeded({ installed: false })
-    const t = make({ stateDir: dir })
+    const t = make({ stateDir: dir, mode: 'interactive' })
     t.feature('sync')
     t.started()
     const got = await sent(t)
@@ -336,13 +336,13 @@ describe('events', () => {
     expect(got.find((r) => r.body.event === 'app_installed')?.body.properties.feature).toBeUndefined()
     expect(readState(dir).installed).toBe(true)
 
-    const next = make({ stateDir: dir })
+    const next = make({ stateDir: dir, mode: 'interactive' })
     next.started()
     expect((await sent(next)).map(keyOf)).toEqual(['app_started'])
   })
 
   test('features outside the list are sent as "other"', async () => {
-    const t = make({ stateDir: seeded() })
+    const t = make({ stateDir: seeded(), mode: 'interactive' })
     t.feature('sync')
     t.feature('chats list')
     t.feature('chats list --limit 5')
@@ -403,7 +403,7 @@ describe('events', () => {
     }
   })
 
-  for (const mode of ['scheduled', 'daemon', 'plugin'] as const) {
+  for (const mode of ['scheduled', 'daemon', 'plugin', 'script'] as const) {
     test(`${mode}: at most once per UTC day per event and feature or error type`, async () => {
       const dir = seeded({ daily: { 'feature_used:sync': '2000-01-01' } })
       const t = make({ stateDir: dir, mode })
@@ -442,8 +442,19 @@ describe('events', () => {
     })
   }
 
+  test('a run detected as a script is throttled too', async () => {
+    const dir = seeded()
+    const first = make({ stateDir: dir }) // no mode, no agent, no terminal
+    first.started()
+    await first.flush(2500)
+    const second = make({ stateDir: dir })
+    second.started()
+    expect((await sent(second)).map(keyOf)).toEqual(['app_started'])
+    expect(readState(dir).daily).toEqual({ app_started: TODAY })
+  })
+
   test('other modes send every event', async () => {
-    for (const mode of ['interactive', 'script', 'agent', 'app', 'server'] as const) {
+    for (const mode of ['interactive', 'agent', 'app', 'server'] as const) {
       const dir = seeded()
       const t = make({ stateDir: dir, mode })
       t.started()
@@ -484,7 +495,7 @@ describe('agent and mode detection', () => {
 describe('state file', () => {
   test('is written through a temp file and has the documented shape', async () => {
     const dir = seeded({ installed: false })
-    const t = make({ stateDir: dir })
+    const t = make({ stateDir: dir, mode: 'interactive' })
     t.started()
     expect(await sent(t)).toHaveLength(2)
     expect(readdirSync(dir)).toEqual(['telemetry.json'])

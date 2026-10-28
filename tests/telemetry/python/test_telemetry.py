@@ -354,11 +354,11 @@ class NoticeTests(Base):
 class EventTests(Base):
     def test_app_installed_is_sent_once(self):
         self.write_state()
-        self.make().started()
+        self.make(mode="interactive").started()
         self.assertEqual(self.sent(), ["app_installed", "app_started"])
         self.assertTrue(self.read_state()["installed"])
         self.server.requests.clear()
-        self.make().started()
+        self.make(mode="interactive").started()
         self.assertEqual(self.sent(), ["app_started"])
 
     def test_app_installed_precedes_the_first_event_of_any_kind(self):
@@ -368,16 +368,16 @@ class EventTests(Base):
 
     def test_features_outside_the_list_become_other(self):
         self.write_state(installed=True)
-        t = self.make()
+        t = self.make(mode="interactive")
         for name in ("sync", "chats list", "rm -rf ~/secret", "Sync", None, 42):
             t.feature(name)
         features = [b["properties"]["feature"] for b in self.bodies()]
         self.assertEqual(sorted(features),
                          sorted(["sync", "chats list", "other", "other", "other", "other"]))
 
-    def test_daily_throttling_in_scheduled_daemon_and_plugin_modes(self):
+    def test_daily_throttling_in_scheduled_daemon_plugin_and_script_modes(self):
         now = self.patch(mock.patch.object(tm, "_now", return_value=NOW))
-        for mode in ("scheduled", "daemon", "plugin"):
+        for mode in ("scheduled", "daemon", "plugin", "script"):
             with self.subTest(mode=mode):
                 now.return_value = NOW
                 self.server.requests.clear()
@@ -410,9 +410,17 @@ class EventTests(Base):
                 self.assertEqual(self.sent(), ["app_started"])
                 self.assertEqual(self.read_state()["daily"], {"app_started": "2026-10-29"})
 
+    def test_a_run_detected_as_a_script_is_throttled_too(self):
+        self.patch(mock.patch.object(tm, "_now", return_value=NOW))
+        self.write_state(installed=True)
+        self.make().started()  # no mode, no agent, no terminal
+        self.make().started()
+        self.assertEqual(self.sent(), ["app_started"])
+        self.assertEqual(self.read_state()["daily"], {"app_started": "2026-10-28"})
+
     def test_other_modes_send_every_event(self):
         self.write_state(installed=True)
-        for mode in (None, "app", "server", "interactive"):
+        for mode in ("interactive", "agent", "app", "server"):
             with self.subTest(mode=mode):
                 self.server.requests.clear()
                 t = self.make(mode=mode)

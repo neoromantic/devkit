@@ -115,11 +115,12 @@ Agent detection, first match: `AI_AGENT` (its value up to the first `_`, lowerca
 
 ### Volume
 
-In the `scheduled`, `daemon` and `plugin` modes each event is sent at most once per UTC day for
-the same event name and `feature` (or `error_type`). A collector that runs every 15 minutes
-then sends one `app_started` a day, not 96. Other modes send every event. The keys in `daily`
-are `app_started`, `feature_used:<feature>` and `error_occurred:<error_type>`; writing a new
-key drops the keys of earlier days.
+In the `scheduled`, `daemon`, `plugin` and `script` modes each event is sent at most once per
+UTC day for the same event name and `feature` (or `error_type`). A collector that runs every 15
+minutes then sends one `app_started` a day, not 96, and so does a status bar or a cron job that
+runs a CLI every minute. Other modes send every event. The keys in `daily` are `app_started`,
+`feature_used:<feature>` and `error_occurred:<error_type>`; writing a new key drops the keys of
+earlier days.
 
 Never sent: argument values, file and folder names, paths (beyond the scrubbed error text),
 host names, user names, environment values, message or document contents, account names,
