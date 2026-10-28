@@ -11,6 +11,9 @@
 # Keys under `repos` are the GitHub repo names under `owner`, which are also the
 # folder names of local checkouts.
 #
+# A repo's own `files` add managed files for that repo only, such as the usage telemetry
+# client (docs/standards/telemetry.md).
+#
 # A repo with `frozen_until` in the future is skipped by sync and by
 # repo-settings --apply. It still shows up in the settings diff.
 
@@ -64,6 +67,8 @@ repos:
     homepage: https://tg.sergeybaus.com
     topics: [telegram, cli, bun, mtproto, sqlite, sergeybaus-oss]
     required_checks: [ci]
+    files:
+      src/telemetry/client.ts: telemetry/telemetry.ts
 
   telesec:
     profile: python
@@ -83,6 +88,8 @@ repos:
       - voice-to-text
       - sergeybaus-oss
     required_checks: [ci]
+    files:
+      telemetry.py: telemetry/telemetry.py
 
   ornament-skill:
     profile: skill
@@ -117,6 +124,8 @@ repos:
     homepage: https://au.sergeybaus.com
     topics: [claude-code, codex, cli, go, sergeybaus-oss]
     required_checks: [ci]
+    files:
+      internal/telemetry/telemetry.go: telemetry/telemetry.go
 
   bb-plugin-provider-retry-advanced:
     profile: bun
