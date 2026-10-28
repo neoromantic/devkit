@@ -60,7 +60,7 @@ User-Agent: devkit-telemetry/1 (<product>/<version>)
 - The project key is PostHog's public, write-only key; it is a constant in each client.
 - `usage.sergeybaus.com/i/*` is a plain Vercel rewrite to `us.i.posthog.com/i/*`. PostHog sees
   the client's IP address and derives the country from it, as it does for the websites.
-- `$process_person_profile: false` keeps events anonymous in PostHog (no person profiles).
+- `$process_person_profile: false` keeps PostHog from making person profiles out of the events.
 - Timeout 3 seconds for the whole request, one attempt, no retries, no queue on disk. The
   response is ignored. Proxy settings come from the environment (`HTTPS_PROXY`). Python's
   `urllib` applies the timeout per socket operation; its send thread never holds the process.
@@ -115,11 +115,12 @@ Agent detection, first match: `AI_AGENT` (its value up to the first `_`, lowerca
 
 ### Volume
 
-In the `scheduled`, `daemon` and `plugin` modes each event is sent at most once per UTC day for
-the same event name and `feature` (or `error_type`). A collector that runs every 15 minutes
-then sends one `app_started` a day, not 96. Other modes send every event. The keys in `daily`
-are `app_started`, `feature_used:<feature>` and `error_occurred:<error_type>`; writing a new
-key drops the keys of earlier days.
+In the `scheduled`, `daemon`, `plugin` and `script` modes each event is sent at most once per
+UTC day for the same event name and `feature` (or `error_type`). A collector that runs every 15
+minutes then sends one `app_started` a day, not 96, and so does a status bar or a cron job that
+runs a CLI every minute. Other modes send every event. The keys in `daily` are `app_started`,
+`feature_used:<feature>` and `error_occurred:<error_type>`; writing a new key drops the keys of
+earlier days.
 
 Never sent: argument values, file and folder names, paths (beyond the scrubbed error text),
 host names, user names, environment values, message or document contents, account names,

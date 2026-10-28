@@ -445,12 +445,14 @@ func TestUnwritableStateDirSendsNothing(t *testing.T) {
 func TestAppInstalledOnce(t *testing.T) {
 	f := setup(t)
 	f.seen(state{})
-	c := New(f.opts())
+	o := f.opts()
+	o.Mode = "interactive"
+	c := New(o)
 	c.Feature("sync") // the first event of any kind brings app_installed
 	equal(t, "first event", f.events(), []string{"app_installed", "feature_used"})
 	c.Started()
 	equal(t, "same run", f.events(), []string{"app_started"})
-	New(f.opts()).Started()
+	New(o).Started()
 	equal(t, "next run", f.events(), []string{"app_started"})
 	if !f.state().Installed {
 		t.Fatal("installed not recorded")
@@ -458,7 +460,7 @@ func TestAppInstalledOnce(t *testing.T) {
 }
 
 func TestDailyThrottle(t *testing.T) {
-	for _, mode := range []string{"scheduled", "daemon", "plugin"} {
+	for _, mode := range []string{"scheduled", "daemon", "plugin", "script"} {
 		t.Run(mode, func(t *testing.T) {
 			f := setup(t)
 			f.seen(state{Installed: true})
@@ -486,20 +488,35 @@ func TestDailyThrottle(t *testing.T) {
 		})
 	}
 
-	t.Run("script", func(t *testing.T) {
-		f := setup(t)
+	t.Run("detected script", func(t *testing.T) {
+		f := setup(t) // no Mode, no agent, no terminal
 		f.seen(state{Installed: true})
 		New(f.opts()).Started()
 		New(f.opts()).Started()
-		equal(t, "events", f.events(), []string{"app_started", "app_started"})
-		equal(t, "daily", f.state().Daily, map[string]string{})
+		equal(t, "events", f.events(), []string{"app_started"})
+		equal(t, "daily", f.state().Daily, map[string]string{"app_started": "2026-10-28"})
 	})
+
+	for _, mode := range []string{"interactive", "agent", "app", "server"} {
+		t.Run(mode+" sends every event", func(t *testing.T) {
+			f := setup(t)
+			f.seen(state{Installed: true})
+			o := f.opts()
+			o.Mode = mode
+			New(o).Started()
+			New(o).Started()
+			equal(t, "events", f.events(), []string{"app_started", "app_started"})
+			equal(t, "daily", f.state().Daily, map[string]string{})
+		})
+	}
 }
 
 func TestFeatureAllowlist(t *testing.T) {
 	f := setup(t)
 	f.seen(state{Installed: true})
-	c := New(f.opts())
+	o := f.opts()
+	o.Mode = "interactive"
+	c := New(o)
 	for _, name := range []string{"chats list", "chats list --chat Family", "Sync", ""} {
 		c.Feature(name)
 	}
