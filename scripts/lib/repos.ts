@@ -23,6 +23,8 @@ export interface RepoEntry {
   frozen_until?: string
   agents?: boolean
   exclude?: string[]
+  /** Extra managed files for this repo only: target path -> template file name in templates/. */
+  files?: Record<string, string>
   settings?: Settings
   /** Status checks the `main (devkit)` branch ruleset requires. Left out: no ruleset is managed. */
   required_checks?: string[]
@@ -53,7 +55,7 @@ export function resolveRepos(file: ReposFile): Repo[] {
   return Object.entries(file.repos).map(([name, entry]) => {
     const profile = file.profiles[entry.profile]
     if (!profile) throw new Error(`repos.yml: ${name} uses unknown profile "${entry.profile}"`)
-    const files: Record<string, string> = { ...(file.files ?? {}), ...(profile.files ?? {}) }
+    const files: Record<string, string> = { ...(file.files ?? {}), ...(profile.files ?? {}), ...(entry.files ?? {}) }
     for (const path of entry.exclude ?? []) delete files[path]
     return {
       ...entry,

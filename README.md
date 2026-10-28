@@ -27,8 +27,9 @@ and nothing here reformats a repo.
 | `repos.yml` | The repos devkit manages, their profile, description, topics and settings |
 | `agents/AGENTS.shared.md` | The shared block for each repo's `AGENTS.md` |
 | `templates/` | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml` |
+| `templates/telemetry/` | Single-file usage telemetry clients for TypeScript, Go and Python, with no dependencies |
 | `renovate/` | Renovate presets: `default` and `maintenance` (no majors) |
-| `docs/standards/` | README, product content, paid readiness, delivery, Homebrew, agent-instruction and security standards |
+| `docs/standards/` | README, product content, paid readiness, delivery, Homebrew, agent-instruction, security and usage telemetry standards |
 
 ## Use it in a repo
 
@@ -126,6 +127,25 @@ one string or `/regex/flags` per line. A line that is fine on purpose takes a
 `privacy-scan:allow` comment; generated fixtures that can't take one go in the repo's
 `.privacy-scan-ignore` (path globs, optionally limited to some rule kinds). See
 [docs/standards/security.md](docs/standards/security.md).
+
+### Usage telemetry
+
+Products report which features run, how often and which errors they hit, through one
+single-file client per language in `templates/telemetry/` (TypeScript for Bun and Node, Go,
+Python 3.11+). Each client is plain HTTPS to PostHog through `usage.sergeybaus.com`, never
+blocks or prints, swallows its own errors and is off with `DO_NOT_TRACK=1`,
+`<PREFIX>_TELEMETRY=0`, in CI and in dev builds. A repo lists the client under its own `files`
+in `repos.yml`, so `sync.ts` keeps the copy identical to the template:
+
+```yaml
+  telegram-sync-cli:
+    files:
+      src/telemetry/client.ts: telemetry/telemetry.ts
+```
+
+Events, properties, the notice and the off switches are in
+[docs/standards/telemetry.md](docs/standards/telemetry.md). Libraries never send anything on
+their own.
 
 ### Renovate
 
