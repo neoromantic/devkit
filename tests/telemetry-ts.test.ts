@@ -630,14 +630,16 @@ describe('host storage: a BB plugin', () => {
       shown: async () => {
         await ready
         await Bun.sleep(5)
-        const { enabled, reason } = telemetry.status()
-        if (!enabled || reason !== 'state' || !p.host) return
+        if (!sharing || !p.host) return
         if (/^\s*(0|off|false)\s*$/i.test(env.BB_TELEMETRY ?? '')) return
         if (!/^\d+\.\d+\.\d+$/.test(version)) return
         telemetry.feature('columns_shown')
       },
     }
-    const apply = (choice: Choice) => telemetry.setEnabled(choice === 'on')
+    let sharing = false
+    const apply = (choice: Choice) => {
+      sharing = telemetry.setEnabled(choice === 'on') && choice === 'on'
+    }
     const ready = Bun.sleep(1).then(() => apply(p.choice))
     listeners.push((choice) => void ready.then(() => apply(choice)))
     return p
@@ -707,6 +709,26 @@ describe('host storage: a BB plugin', () => {
     expect(p.state().id).toBeNull()
   })
 
+  test('a choice that could not be saved keeps it closed, even after the database recovers', async () => {
+    const file = dbFile()
+    const p = bbPlugin(file)
+    await p.choose('on')
+    p.db.run('pragma query_only = on')
+    await p.choose('off')
+    expect(p.state().enabled).toBe(true) // the off write failed
+    p.db.run('pragma query_only = off')
+    await p.shown()
+    expect(await sent(p.telemetry)).toEqual([])
+
+    await p.choose('on')
+    const reinstalled = bbPlugin(file)
+    reinstalled.db.run('pragma query_only = on') // forgetting the old id at load fails
+    await Bun.sleep(5)
+    reinstalled.db.run('pragma query_only = off')
+    await reinstalled.shown()
+    expect(await sent(reinstalled.telemetry)).toEqual([])
+  })
+
   test('off forgets the id, and a restored snapshot brings the old choice and id back', async () => {
     const file = dbFile()
     const p = bbPlugin(file)
@@ -773,6 +795,7 @@ describe('host storage: a BB plugin', () => {
     const ro = bbPlugin(file, { readonly: true, choice: 'on' }) // reads work, writes throw
     await ro.shown()
     expect(ro.telemetry.status()).toMatchObject({ enabled: true, reason: 'state' })
+    ro.telemetry.feature('columns_shown')
     expect(await sent(ro.telemetry)).toEqual([])
     expect(ro.telemetry.setEnabled(true)).toBe(false)
 

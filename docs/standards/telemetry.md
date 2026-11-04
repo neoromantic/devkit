@@ -309,10 +309,14 @@ const telemetry = createTelemetry({
 
 **The choice reaches the client** at load and on every settings change, never from an event
 handler, so a stale read cannot turn it back on. "Share usage" and "Keep off" only write the
-setting:
+setting. `sharing` is true only while the current choice is `on` and was saved; a choice that
+could not be saved keeps it false until the next one is:
 
 ```ts
-const apply = ({ usageSharing }: { usageSharing: string }) => telemetry.setEnabled(usageSharing === 'on')
+let sharing = false
+const apply = ({ usageSharing }: { usageSharing: string }) => {
+  sharing = telemetry.setEnabled(usageSharing === 'on') && usageSharing === 'on'
+}
 const ready = settings.get().then(apply)
 settings.onChange((next) => void ready.then(() => apply(next)))
 ```
@@ -326,8 +330,7 @@ settings.onChange((next) => void ready.then(() => apply(next)))
 async function columnsShown() {
   await ready
   const { generalSettings } = await bb.sdk.system.config()
-  const { enabled, reason } = telemetry.status()
-  if (!enabled || reason !== 'state') return // only the user's own "on"
+  if (!sharing) return
   if (generalSettings.telemetryEnabled === false) return
   if (/^\s*(0|off|false)\s*$/i.test(process.env.BB_TELEMETRY ?? '')) return
   if (!/^\d+\.\d+\.\d+$/.test(version)) return
