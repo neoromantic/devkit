@@ -12,7 +12,7 @@ anything, or fail it: every error inside the client is swallowed.
 
 | Language | Template | Used by |
 |---|---|---|
-| TypeScript (Bun and Node) | `templates/telemetry/telemetry.ts` | CLIs, server code |
+| TypeScript (Bun and Node) | `templates/telemetry/telemetry.ts` | CLIs, server code, BB plugins |
 | Go | `templates/telemetry/telemetry.go` | CLIs, daemons |
 | Python 3.11+ | `templates/telemetry/telemetry.py` | plugins, desktop apps |
 
@@ -145,6 +145,9 @@ key present, in this order.
 - `installed` records that `app_installed` was sent.
 - `daily` holds the last UTC day each throttled key was sent.
 
+With the `storage` option (TypeScript only, see [BB plugins](#bb-plugins)) the same JSON
+goes to the host's store instead of the file.
+
 Writes go to a temp file and are renamed into place. A lost update between two processes is
 acceptable. A state directory that cannot be written means nothing is sent and no notice is
 printed. The client reads the file again for every event, so `telemetry off` in another process
@@ -186,6 +189,8 @@ decides where the notice appears:
 - an install script prints it and marks it seen;
 - an app or plugin shows it once in its own UI (a banner, the settings panel, a message to the
   owner) and marks it seen;
+- a BB plugin asks for an explicit choice instead and never marks it seen (see
+  [BB plugins](#bb-plugins));
 - Homebrew `caveats` and the README repeat it.
 
 Nothing is due while telemetry is off, and the notice gate holds even when
@@ -217,6 +222,7 @@ const t = createTelemetry({
   mode: undefined,                   // or 'scheduled' | 'daemon' | 'app' | 'plugin' | 'server' …
   features: ['chats list', 'sync'],  // anything else becomes "other"
   offCommand: 'tg telemetry off',
+  storage: undefined,                // TypeScript only: { read, write } instead of telemetry.json
 })
 t.noticeText()          // the notice while it is due, else null: for an app or plugin that shows it in its own UI
 t.showNotice()          // prints the notice once if it is due and stderr is a terminal or an agent runs it; returns whether it printed
@@ -237,6 +243,138 @@ throttling; `options` are the product fields of `createTelemetry` (`product`, `v
 `channel`, `mode`, `envPrefix`). It adds the common properties and applies rules 1–4 of
 "Turning it off". Server code with its own identifiers (a web service) uses it directly, with a
 random or keyed id that is never an email or an account id; an empty id becomes a random one.
+
+## BB plugins
+
+A BB plugin's server sends nothing until the user turns usage sharing on, and keeps the client
+state in the plugin's own database. Only the TypeScript client has the `storage` option.
+
+| Plugin repo (`product`) | `feature` | Sent when |
+|---|---|---|
+| `bb-plugin-subthread-columns` | `columns_shown` | a child column is at least partly in view, the document is visible and the BB window is active |
+| `bb-plugin-model-effort-badges` | `badge_displayed` | a model/effort badge is shown in the visible part of the active window |
+| `bb-plugin-provider-retry-advanced` | `retry_accepted` | core accepted an automatic retry (not that the turn recovered) |
+| `bb-plugin-ai-usage` | `panel_opened` | the user opened the AI Usage panel |
+| `bb-plugin-responsibilities` | set by its owner | |
+
+The plugin owner checks the actual trigger. `ai-usage` stays the CLI and menu bar app; the
+plugin is a separate product with its own install ID.
+
+**Choice.** A `select` setting with `undecided`, `on` and `off`, `undecided` by default. A
+plugin with its own UI also shows a short notice with "Share usage" and "Keep off" and no
+modal or autofocus; a headless plugin uses the host settings form. Only an explicit `on` turns
+it on; closing or ignoring the notice does not. Choosing sends nothing, and the event that
+showed the notice is not sent later; the next qualifying event is. Never call `showNotice()`
+or `markNoticeSeen()`: they silence the whole process, and creating a second client to undo
+that is not allowed. The client's own notice text is not used. Existing installs stay silent
+until their user chooses.
+
+**Notice.** Short, specific to the plugin, with a link to the details:
+
+> Share which days you use <feature>, plus plugin version and system info, using a random ID
+> for this plugin. Sent to PostHog; it receives your IP and derives country. No thread content.
+> Nothing is sent until you turn this on. You can turn it off in Settings. Also disabled when
+> BB usage sharing is off.
+
+The details, reachable before the choice, list every property (`product`, `$app_version`,
+`$os`, `$os_version`, `arch`, `runtime`, `channel` and `mode` = `plugin`, `feature`, and
+`agent` if the BB server itself runs under an AI agent), the `app_installed` first report, the
+daily limit, what a rollback does (below), the BB switches, and deletion by install ID.
+
+**State.** One row in `bb.storage.database()`, the plugin's synchronous SQLite. The adapter asks
+for the handle on every call because the host closes it on reload. A write returns only after
+SQLite has written the row, and an error means nothing is sent. `bb.storage.kv` and settings
+are asynchronous and cannot back `storage`; the type does not accept them.
+
+```ts
+bb.storage.migrate(bb.storage.database(), [
+  'create table telemetry (id integer primary key check (id = 1), json text not null)',
+])
+const telemetry = createTelemetry({
+  product: 'bb-plugin-subthread-columns',
+  version,                      // from the plugin's package.json
+  stateDir: '',
+  storage: {
+    read: () => (bb.storage.database().prepare('select json from telemetry').get() as { json: string } | undefined)?.json,
+    write: (json) => {
+      bb.storage.database().prepare('insert or replace into telemetry (id, json) values (1, ?)').run(json)
+      return true
+    },
+  },
+  channel: 'plugin',
+  mode: 'plugin',
+  features: ['columns_shown'],
+})
+```
+
+**The choice reaches the client** at load and on every settings change, never from an event
+handler, so a stale read cannot turn it back on. "Share usage" and "Keep off" only write the
+setting. `sharing` is true only while the current choice is `on` and was saved; a choice that
+could not be saved keeps it false until the next one is:
+
+```ts
+let sharing = false
+const apply = ({ usageSharing }: { usageSharing: string }) => {
+  sharing = telemetry.setEnabled(usageSharing === 'on') && usageSharing === 'on'
+}
+let changed = false
+const ready = settings.get().then((values) => {
+  if (!changed) apply(values)
+})
+settings.onChange((next) => {
+  changed = true
+  apply(next)
+})
+```
+
+`onChange` applies the new choice at once, so an event already waiting sees it; a value read at
+load never overrides a later change.
+
+`setEnabled(false)` for `undecided` and `off` forgets the id and the counters; `on` keeps them.
+
+**Each qualifying event** awaits the load and the host config, then checks and sends with no
+`await` in between:
+
+```ts
+async function columnsShown() {
+  await ready
+  const { generalSettings } = await bb.sdk.system.config()
+  if (!sharing) return
+  if (generalSettings.telemetryEnabled === false) return
+  if (/^\s*(0|off|false)\s*$/i.test(process.env.BB_TELEMETRY ?? '')) return
+  if (!/^\d+\.\d+\.\d+$/.test(version)) return
+  telemetry.feature('columns_shown')
+}
+```
+
+`DO_NOT_TRACK`, CI, test runs and `0.0.0` are rules of the client.
+
+**Events.** `app_installed` once per install ID with its first report (the first report of
+that ID, not an installation) and `feature_used` at most once per UTC day. A plugin calls
+neither `started()` nor `error()`. Usage counts only `feature_used`, as distinct (install ID,
+UTC day, feature).
+
+**Limits.** The daily limit holds within one server process: the client reads and writes the
+row in one synchronous step, so concurrent handlers and two client instances on one database
+send once. Two processes writing the same database at the same moment may both send, which the
+query's dedup absorbs. A failed write sends nothing; a failed send is not retried. A turn-off takes effect when BB reports it through
+`onChange`; an event that sent before that is not withdrawn.
+
+**Lifecycle.** Updates, disable and enable keep the choice and the id. Uninstall removes the
+settings but not the database, so after a reinstall the choice is `undecided` and the client
+forgets the old id at load. A rollback restores settings and database together, including an earlier
+`on`: the details tell users to check usage sharing after a rollback and never promise that
+`off` survives one. A new plugin id starts over.
+
+**Versions.** Only a stable `MAJOR.MINOR.PATCH` from the plugin's package metadata sends; stage
+and prerelease builds (`0.0.0-stage`, `1.3.0-stage.2`, `1.3.0-rc.1`) never do. A stable version
+does not prove a published release: a local rebuild of the same sources with the user's consent
+may send. A QA smoke runs on isolated BB state with `DO_NOT_TRACK=1` in the server process
+before the plugin loads, and shows that nothing left the machine. Tests that expect a send run
+separately with `endpoint` pointed at a local receiver; never against the real endpoint.
+
+The usage page keeps three fields per plugin, each nullable and never filled from another:
+`instrumentedRelease`, `firstObservedEvent` and `knownCoverageStart`.
 
 ## Changing a product
 
