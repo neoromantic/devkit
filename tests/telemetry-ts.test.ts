@@ -590,11 +590,11 @@ describe('host storage: a BB plugin', () => {
    */
   function bbPlugin(
     file: string,
-    opts: { version?: string; env?: Env; host?: boolean; readonly?: boolean; choice?: Choice } = {},
+    opts: { version?: string; env?: Env; host?: boolean; choice?: Choice } = {},
   ) {
     const version = opts.version ?? '1.2.3'
     const env = opts.env ?? {}
-    const db = new Database(file, { readonly: opts.readonly })
+    const db = new Database(file)
     const row = () => db.query<{ json: string }, []>('select json from telemetry').get()?.json
     const telemetry = createTelemetry({
       product: 'bb-plugin-demo',
@@ -826,7 +826,8 @@ describe('host storage: a BB plugin', () => {
     expect(await sent(closed.telemetry)).toEqual([])
 
     await bbPlugin(file).choose('on')
-    const ro = bbPlugin(file, { readonly: true, choice: 'on' }) // reads work, writes throw
+    const ro = bbPlugin(file, { choice: 'on' })
+    ro.db.run('pragma query_only = on') // reads work, writes throw
     await ro.shown()
     expect(ro.telemetry.status()).toMatchObject({ enabled: true, reason: 'state' })
     ro.telemetry.feature('columns_shown')
