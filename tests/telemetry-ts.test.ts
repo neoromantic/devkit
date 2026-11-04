@@ -588,7 +588,10 @@ describe('host storage: a BB plugin', () => {
    * The binding from docs/standards/telemetry.md ("BB plugins"), with bun:sqlite in place of
    * bb.storage.database() and promises in place of the plugin setting and the host config.
    */
-  function bbPlugin(file: string, opts: { version?: string; env?: Env; host?: boolean; readonly?: boolean } = {}) {
+  function bbPlugin(
+    file: string,
+    opts: { version?: string; env?: Env; host?: boolean; readonly?: boolean; choice?: Choice } = {},
+  ) {
     const version = opts.version ?? '1.2.3'
     const env = opts.env ?? {}
     const db = new Database(file, { readonly: opts.readonly })
@@ -610,35 +613,41 @@ describe('host storage: a BB plugin', () => {
       endpoint,
       env,
     })
+    const listeners: ((choice: Choice) => void)[] = []
     const p = {
       db,
       telemetry,
-      choice: 'undecided' as Choice,
+      choice: opts.choice ?? 'undecided',
       host: opts.host ?? true,
       state: () => JSON.parse(row() ?? 'null'),
+      /** A settings write: saved, then the onChange listeners run. */
       choose: async (choice: Choice) => {
         await Bun.sleep(1)
         p.choice = choice
+        for (const listener of listeners) listener(choice)
       },
-      /** A qualifying event: await the choice and the host switch, then no await until the send. */
+      /** A qualifying event: await the load and the host config, then no await until the send. */
       shown: async () => {
-        await Bun.sleep(1)
-        const choice = p.choice
-        await Bun.sleep(1)
-        if (!telemetry.setEnabled(choice === 'on') || choice !== 'on') return
-        if (!p.host || /^(0|off|false)$/i.test(env.BB_TELEMETRY ?? '')) return
+        await ready
+        await Bun.sleep(5)
+        const { enabled, reason } = telemetry.status()
+        if (!enabled || reason !== 'state' || !p.host) return
+        if (/^\s*(0|off|false)\s*$/i.test(env.BB_TELEMETRY ?? '')) return
         if (!/^\d+\.\d+\.\d+$/.test(version)) return
         telemetry.feature('columns_shown')
       },
     }
+    const apply = (choice: Choice) => telemetry.setEnabled(choice === 'on')
+    const ready = Bun.sleep(1).then(() => apply(p.choice))
+    listeners.push((choice) => void ready.then(() => apply(choice)))
     return p
   }
 
   test('nothing is sent before the choice, and the choice itself sends nothing', async () => {
     const p = bbPlugin(dbFile())
     p.telemetry.feature('columns_shown') // even a call that skips the binding
-    expect(await sent(p.telemetry)).toEqual([])
     expect(p.state()).toBeNull()
+    expect(await sent(p.telemetry)).toEqual([])
 
     await p.shown()
     expect(await sent(p.telemetry)).toEqual([])
@@ -688,8 +697,19 @@ describe('host storage: a BB plugin', () => {
     }
   })
 
-  test('off forgets the id, and a restored snapshot brings the old choice and id back', async () => {
+  test('turning it off while an event awaits the host config sends nothing', async () => {
     const p = bbPlugin(dbFile())
+    await p.choose('on')
+    const pending = p.shown()
+    await p.choose('off')
+    await pending
+    expect(await sent(p.telemetry)).toEqual([])
+    expect(p.state().id).toBeNull()
+  })
+
+  test('off forgets the id, and a restored snapshot brings the old choice and id back', async () => {
+    const file = dbFile()
+    const p = bbPlugin(file)
     setSystemTime(new Date('2030-01-01T12:00:00Z'))
     try {
       await p.choose('on')
@@ -702,14 +722,20 @@ describe('host storage: a BB plugin', () => {
       expect(await sent(p.telemetry)).toEqual([])
       expect(p.state()).toEqual({ id: null, enabled: false, notice: 1, installed: false, daily: {} })
 
-      // A plugin rollback restores the settings and the database together.
-      p.choice = snapshot.choice
+      // A plugin rollback restores the settings and the database together, then reloads.
       p.db.query('update telemetry set json = ?').run(JSON.stringify(snapshot.state))
+      const back = bbPlugin(file, { choice: snapshot.choice })
       setSystemTime(new Date('2030-01-02T12:00:00Z'))
-      await p.shown()
-      const got = await sent(p.telemetry)
+      await back.shown()
+      const got = await sent(back.telemetry)
       expect(got.map(keyOf)).toEqual(['feature_used:columns_shown'])
       expect(got[0]?.body.distinct_id).toBe(snapshot.state.id)
+
+      // A reinstall keeps the database but not the setting: the old id goes at load.
+      const reinstalled = bbPlugin(file)
+      await reinstalled.shown()
+      expect(await sent(reinstalled.telemetry)).toEqual([])
+      expect(reinstalled.state().id).toBeNull()
     } finally {
       setSystemTime()
     }
@@ -719,6 +745,7 @@ describe('host storage: a BB plugin', () => {
     const cases: Parameters<typeof bbPlugin>[1][] = [
       { host: false },
       { env: { BB_TELEMETRY: 'false' } },
+      { env: { BB_TELEMETRY: ' Off ' } },
       { env: { DO_NOT_TRACK: '1' } },
       { env: { CI: 'true' } },
       { version: '0.0.0' },
@@ -742,10 +769,10 @@ describe('host storage: a BB plugin', () => {
     await closed.shown()
     expect(await sent(closed.telemetry)).toEqual([])
 
-    expect(bbPlugin(file).telemetry.setEnabled(true)).toBe(true)
-    const ro = bbPlugin(file, { readonly: true }) // reads work, writes throw
+    await bbPlugin(file).choose('on')
+    const ro = bbPlugin(file, { readonly: true, choice: 'on' }) // reads work, writes throw
+    await ro.shown()
     expect(ro.telemetry.status()).toMatchObject({ enabled: true, reason: 'state' })
-    ro.telemetry.feature('columns_shown')
     expect(await sent(ro.telemetry)).toEqual([])
     expect(ro.telemetry.setEnabled(true)).toBe(false)
 

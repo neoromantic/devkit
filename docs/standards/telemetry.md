@@ -307,22 +307,34 @@ const telemetry = createTelemetry({
 })
 ```
 
-**Each qualifying event** awaits the setting and the host config first, then calls the client
-with no `await` in between:
+**The choice reaches the client** at load and on every settings change, never from an event
+handler, so a stale read cannot turn it back on. "Share usage" and "Keep off" only write the
+setting:
+
+```ts
+const apply = ({ usageSharing }: { usageSharing: string }) => telemetry.setEnabled(usageSharing === 'on')
+const ready = settings.get().then(apply)
+settings.onChange((next) => void ready.then(() => apply(next)))
+```
+
+`setEnabled(false)` for `undecided` and `off` forgets the id and the counters; `on` keeps them.
+
+**Each qualifying event** awaits the load and the host config, then checks and sends with no
+`await` in between:
 
 ```ts
 async function columnsShown() {
-  const { usageSharing } = await settings.get()
+  await ready
   const { generalSettings } = await bb.sdk.system.config()
-  if (!telemetry.setEnabled(usageSharing === 'on') || usageSharing !== 'on') return
+  const { enabled, reason } = telemetry.status()
+  if (!enabled || reason !== 'state') return // only the user's own "on"
   if (generalSettings.telemetryEnabled === false) return
-  if (/^(0|off|false)$/i.test(process.env.BB_TELEMETRY ?? '')) return
+  if (/^\s*(0|off|false)\s*$/i.test(process.env.BB_TELEMETRY ?? '')) return
   if (!/^\d+\.\d+\.\d+$/.test(version)) return
   telemetry.feature('columns_shown')
 }
 ```
 
-`setEnabled(false)` for `undecided` and `off` forgets the id and the counters; `on` keeps them.
 `DO_NOT_TRACK`, CI, test runs and `0.0.0` are rules of the client.
 
 **Events.** `app_installed` once per install ID with its first report (the first report of
@@ -336,8 +348,8 @@ send once. Two processes writing the same database at the same moment may both s
 query's dedup absorbs. A failed write sends nothing; a failed send is not retried.
 
 **Lifecycle.** Updates, disable and enable keep the choice and the id. Uninstall removes the
-settings but not the database, so after a reinstall the choice is `undecided` and the next event
-forgets the old id. A rollback restores settings and database together, including an earlier
+settings but not the database, so after a reinstall the choice is `undecided` and the client
+forgets the old id at load. A rollback restores settings and database together, including an earlier
 `on`: the details tell users to check usage sharing after a rollback and never promise that
 `off` survives one. A new plugin id starts over.
 
