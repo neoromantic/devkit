@@ -620,16 +620,20 @@ describe('host storage: a BB plugin', () => {
       choice: opts.choice ?? 'undecided',
       host: opts.host ?? true,
       state: () => JSON.parse(row() ?? 'null'),
-      /** A settings write: saved, then the onChange listeners run. */
-      choose: async (choice: Choice) => {
-        await Bun.sleep(1)
+      /** The setting is saved and onChange runs. */
+      change: (choice: Choice) => {
         p.choice = choice
         for (const listener of listeners) listener(choice)
       },
+      choose: async (choice: Choice) => {
+        await Bun.sleep(1)
+        p.change(choice)
+      },
+      config: () => Bun.sleep(5),
       /** A qualifying event: await the load and the host config, then no await until the send. */
       shown: async () => {
         await ready
-        await Bun.sleep(5)
+        await p.config()
         if (!sharing || !p.host) return
         if (/^\s*(0|off|false)\s*$/i.test(env.BB_TELEMETRY ?? '')) return
         if (!/^\d+\.\d+\.\d+$/.test(version)) return
@@ -640,8 +644,15 @@ describe('host storage: a BB plugin', () => {
     const apply = (choice: Choice) => {
       sharing = telemetry.setEnabled(choice === 'on') && choice === 'on'
     }
-    const ready = Bun.sleep(1).then(() => apply(p.choice))
-    listeners.push((choice) => void ready.then(() => apply(choice)))
+    let changed = false
+    const loaded = p.choice
+    const ready = Bun.sleep(1).then(() => {
+      if (!changed) apply(loaded)
+    })
+    listeners.push((choice) => {
+      changed = true
+      apply(choice)
+    })
     return p
   }
 
@@ -705,6 +716,29 @@ describe('host storage: a BB plugin', () => {
     const pending = p.shown()
     await p.choose('off')
     await pending
+    expect(await sent(p.telemetry)).toEqual([])
+    expect(p.state().id).toBeNull()
+  })
+
+  test('off closes at once, even for an event whose host config resolved in the same task', async () => {
+    const p = bbPlugin(dbFile())
+    await p.choose('on')
+    let resolve = () => {}
+    p.config = () => new Promise<void>((done) => (resolve = done))
+    const pending = p.shown()
+    await Bun.sleep(1)
+    resolve()
+    p.change('off')
+    await pending
+    expect(await sent(p.telemetry)).toEqual([])
+  })
+
+  test('a change during load wins over the value read at load', async () => {
+    const file = dbFile()
+    await bbPlugin(file).choose('on')
+    const p = bbPlugin(file, { choice: 'on' })
+    p.change('off')
+    await p.shown()
     expect(await sent(p.telemetry)).toEqual([])
     expect(p.state().id).toBeNull()
   })

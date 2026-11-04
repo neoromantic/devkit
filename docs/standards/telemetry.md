@@ -317,9 +317,18 @@ let sharing = false
 const apply = ({ usageSharing }: { usageSharing: string }) => {
   sharing = telemetry.setEnabled(usageSharing === 'on') && usageSharing === 'on'
 }
-const ready = settings.get().then(apply)
-settings.onChange((next) => void ready.then(() => apply(next)))
+let changed = false
+const ready = settings.get().then((values) => {
+  if (!changed) apply(values)
+})
+settings.onChange((next) => {
+  changed = true
+  apply(next)
+})
 ```
+
+`onChange` applies the new choice at once, so an event already waiting sees it; a value read at
+load never overrides a later change.
 
 `setEnabled(false)` for `undecided` and `off` forgets the id and the counters; `on` keeps them.
 
@@ -348,7 +357,8 @@ UTC day, feature).
 **Limits.** The daily limit holds within one server process: the client reads and writes the
 row in one synchronous step, so concurrent handlers and two client instances on one database
 send once. Two processes writing the same database at the same moment may both send, which the
-query's dedup absorbs. A failed write sends nothing; a failed send is not retried.
+query's dedup absorbs. A failed write sends nothing; a failed send is not retried. A turn-off takes effect when BB reports it through
+`onChange`; an event that sent before that is not withdrawn.
 
 **Lifecycle.** Updates, disable and enable keep the choice and the id. Uninstall removes the
 settings but not the database, so after a reinstall the choice is `undecided` and the client
