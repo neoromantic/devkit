@@ -143,6 +143,9 @@ in `repos.yml`, so `sync.ts` keeps the copy identical to the template:
       src/telemetry/client.ts: telemetry/telemetry.ts
 ```
 
+A BB plugin passes the TypeScript client a `storage` adapter over its own SQLite database and
+sends only after the user turns usage sharing on.
+
 Events, properties, the notice and the off switches are in
 [docs/standards/telemetry.md](docs/standards/telemetry.md). Libraries never send anything on
 their own.

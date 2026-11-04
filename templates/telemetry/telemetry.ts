@@ -63,6 +63,8 @@ export interface TelemetryOptions {
   envPrefix?: string
   /** The product's state directory; telemetry.json lives here. */
   stateDir: string
+  /** Keeps the state somewhere else than telemetry.json, such as a BB plugin's database. */
+  storage?: TelemetryStorage
   channel: Channel
   /** Set it when the product knows; otherwise agent, interactive or script. */
   mode?: Mode | undefined
@@ -83,6 +85,14 @@ export type CaptureOptions = Omit<
   TelemetryOptions,
   'stateDir' | 'channel' | 'features' | 'offCommand'
 > & { channel?: Channel }
+
+/** Synchronous on purpose: a write must be saved before an event is sent. */
+export interface TelemetryStorage {
+  /** The saved JSON, or undefined when there is none. */
+  read(): string | undefined
+  /** Saves the JSON; returns false or throws when it could not. */
+  write(json: string): boolean
+}
 
 export interface TelemetryStatus {
   enabled: boolean
@@ -252,9 +262,9 @@ function systemProps(): Props {
   return system
 }
 
-function readState(file: string): State {
+function readState(storage: TelemetryStorage): State {
   const raw: Partial<Record<keyof State, unknown>> =
-    safe(() => JSON.parse(fs.readFileSync(file, 'utf8')), null) ?? {}
+    safe(() => JSON.parse(storage.read() ?? '{}'), null) ?? {}
   const daily = typeof raw.daily === 'object' && raw.daily ? raw.daily : {}
   return {
     id: typeof raw.id === 'string' && UUID.test(raw.id) ? raw.id : null,
@@ -270,13 +280,11 @@ function readState(file: string): State {
 }
 
 /** One line of JSON, written to a temp file and renamed into place. */
-function writeState(file: string, state: State): boolean {
+function writeFile(file: string, json: string): boolean {
   if (!file) return false
   const tmp = `${file}.${process.pid}.tmp`
   try {
     fs.mkdirSync(dirname(file), { recursive: true })
-    const { id, enabled, notice, installed, daily } = state
-    const json = JSON.stringify({ id, enabled, notice, installed, daily })
     fs.writeFileSync(tmp, `${json}\n`)
     fs.renameSync(tmp, file)
     return true
@@ -284,6 +292,12 @@ function writeState(file: string, state: State): boolean {
     safe(() => fs.rmSync(tmp, { force: true }), undefined)
     return false
   }
+}
+
+function writeState(storage: TelemetryStorage, state: State): boolean {
+  const { id, enabled, notice, installed, daily } = state
+  const json = JSON.stringify({ id, enabled, notice, installed, daily })
+  return safe(() => storage.write(json), false)
 }
 
 function envelope(event: string, distinctId: string, properties: object) {
@@ -395,6 +409,10 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
   // An empty stateDir must not mean the current directory.
   const stateDir = options.stateDir
   const stateFile = stateDir ? join(stateDir, 'telemetry.json') : ''
+  const storage = options.storage ?? {
+    read: () => fs.readFileSync(stateFile, 'utf8'),
+    write: (json: string) => writeFile(stateFile, json),
+  }
   const features = new Set(options.features ?? [])
   const throttled = ['scheduled', 'daemon', 'plugin', 'script'].includes(r.mode)
   const inflight = new Set<Promise<void>>()
@@ -415,7 +433,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     const first = state.notice < NOTICE_VERSION
     state.notice = NOTICE_VERSION
     state.id ??= randomUUID()
-    if (!writeState(stateFile, state)) return false
+    if (!writeState(storage, state)) return false
     if (first && silence) quiet = true
     return true
   }
@@ -423,7 +441,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
   const track = (event: string, extra: Props, key: string): void => {
     if (quiet || r.fixed?.enabled === false) return
     // Read every time: `telemetry off` in another process stops a daemon.
-    const state = readState(stateFile)
+    const state = readState(storage)
     const decision = decide(state)
     if (!decision.enabled || state.notice < NOTICE_VERSION) return
     const day = new Date().toISOString().slice(0, 10)
@@ -440,7 +458,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     }
     // A state directory that cannot be written means nothing is sent.
     const next = { ...state, id, installed: true }
-    if (changed && !writeState(stateFile, next)) return
+    if (changed && !writeState(storage, next)) return
     const common = r.common()
     for (const [name, props] of events) {
       const body = envelope(name, id, { ...common, ...props })
@@ -452,10 +470,10 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
 
   return {
     noticeText: () =>
-      safe(() => (due(readState(stateFile)) ? notice : null), null),
+      safe(() => (due(readState(storage)) ? notice : null), null),
     showNotice: () =>
       safe(() => {
-        const state = readState(stateFile)
+        const state = readState(storage)
         // Write first: a notice that can't be recorded would print every run.
         if (!due(state) || !r.noticeFits() || !seen(state, true)) return false
         process.stderr.write(`${notice}\n`)
@@ -463,7 +481,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       }, false),
     markNoticeSeen: () =>
       safe(() => {
-        const state = readState(stateFile)
+        const state = readState(storage)
         if (due(state)) seen(state, true)
       }, undefined),
     started: () =>
@@ -487,7 +505,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       clearTimeout(timer)
     },
     status: () => {
-      const state = readState(stateFile)
+      const state = readState(storage)
       const { enabled, reason, debug = false } = decide(state)
       return {
         enabled,
@@ -500,7 +518,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     },
     setEnabled: (on) =>
       safe(() => {
-        const state = readState(stateFile)
+        const state = readState(storage)
         // An explicit opt-in is not a notice run: this process may send.
         if (on) return seen({ ...state, enabled: true }, false)
         // Off forgets the id and the counters.
@@ -511,7 +529,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
           installed: false,
           daily: {},
         }
-        return writeState(stateFile, cleared)
+        return writeState(storage, cleared)
       }, false),
   }
 }

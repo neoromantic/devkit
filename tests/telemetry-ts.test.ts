@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
+import { Database } from 'bun:sqlite'
+import { afterAll, beforeAll, describe, expect, setSystemTime, spyOn, test } from 'bun:test'
 import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,6 +12,7 @@ import {
   type Reason,
   type Telemetry,
   type TelemetryOptions,
+  type TelemetryStorage,
 } from '../templates/telemetry/telemetry'
 
 const ID = '8b0e6c1a-3f0d-4a51-9a7e-2f1c5d9e4b77'
@@ -567,6 +569,202 @@ describe('state file', () => {
     expect(again.map(keyOf).sort()).toEqual(['app_installed', 'app_started'])
     expect(again[0]?.body.distinct_id).not.toBe(state.id)
     expect(readState(fresh).id).toBe(again[0]?.body.distinct_id)
+  })
+})
+
+describe('host storage: a BB plugin', () => {
+  type Choice = 'undecided' | 'on' | 'off'
+
+  /** A plugin database with the telemetry table, as bb.storage.migrate() would leave it. */
+  function dbFile(): string {
+    const file = join(newDir(), 'data.db')
+    const db = new Database(file)
+    db.run('create table telemetry (id integer primary key check (id = 1), json text not null)')
+    db.close()
+    return file
+  }
+
+  /**
+   * The binding from docs/standards/telemetry.md ("BB plugins"), with bun:sqlite in place of
+   * bb.storage.database() and promises in place of the plugin setting and the host config.
+   */
+  function bbPlugin(file: string, opts: { version?: string; env?: Env; host?: boolean; readonly?: boolean } = {}) {
+    const version = opts.version ?? '1.2.3'
+    const env = opts.env ?? {}
+    const db = new Database(file, { readonly: opts.readonly })
+    const row = () => db.query<{ json: string }, []>('select json from telemetry').get()?.json
+    const telemetry = createTelemetry({
+      product: 'bb-plugin-demo',
+      version,
+      stateDir: '',
+      storage: {
+        read: row,
+        write: (json) => {
+          db.query('insert or replace into telemetry (id, json) values (1, ?)').run(json)
+          return true
+        },
+      },
+      channel: 'plugin',
+      mode: 'plugin',
+      features: ['columns_shown'],
+      endpoint,
+      env,
+    })
+    const p = {
+      db,
+      telemetry,
+      choice: 'undecided' as Choice,
+      host: opts.host ?? true,
+      state: () => JSON.parse(row() ?? 'null'),
+      choose: async (choice: Choice) => {
+        await Bun.sleep(1)
+        p.choice = choice
+      },
+      /** A qualifying event: await the choice and the host switch, then no await until the send. */
+      shown: async () => {
+        await Bun.sleep(1)
+        const choice = p.choice
+        await Bun.sleep(1)
+        if (!telemetry.setEnabled(choice === 'on') || choice !== 'on') return
+        if (!p.host || /^(0|off|false)$/i.test(env.BB_TELEMETRY ?? '')) return
+        if (!/^\d+\.\d+\.\d+$/.test(version)) return
+        telemetry.feature('columns_shown')
+      },
+    }
+    return p
+  }
+
+  test('nothing is sent before the choice, and the choice itself sends nothing', async () => {
+    const p = bbPlugin(dbFile())
+    p.telemetry.feature('columns_shown') // even a call that skips the binding
+    expect(await sent(p.telemetry)).toEqual([])
+    expect(p.state()).toBeNull()
+
+    await p.shown()
+    expect(await sent(p.telemetry)).toEqual([])
+    expect(p.state()).toEqual({ id: null, enabled: false, notice: 0, installed: false, daily: {} })
+
+    await p.choose('on') // "Share usage"
+    expect(await sent(p.telemetry)).toEqual([])
+
+    await p.shown()
+    const got = await sent(p.telemetry)
+    expect(got.map(keyOf)).toEqual(['app_installed', 'feature_used:columns_shown'])
+    expect(got.map((r) => r.body.distinct_id)).toEqual([p.state().id, p.state().id])
+    expect(got[1]?.body.properties).toEqual({
+      $process_person_profile: false,
+      $lib: 'devkit-telemetry',
+      $lib_version: '1',
+      product: 'bb-plugin-demo',
+      $app_version: '1.2.3',
+      $os: expect.any(String),
+      $os_version: expect.any(String),
+      arch: process.arch,
+      runtime: `bun ${Bun.version}`,
+      channel: 'plugin',
+      mode: 'plugin',
+      feature: 'columns_shown',
+    })
+  })
+
+  test('once per UTC day per install, across awaits and two instances on one database', async () => {
+    const file = dbFile()
+    setSystemTime(new Date('2030-01-01T23:59:00Z'))
+    try {
+      const p = bbPlugin(file)
+      const reloaded = bbPlugin(file)
+      await Promise.all([p.choose('on'), reloaded.choose('on')])
+      await Promise.all([p.shown(), p.shown(), reloaded.shown(), reloaded.shown()])
+      expect((await sent(p.telemetry)).map(keyOf)).toEqual(['app_installed', 'feature_used:columns_shown'])
+      expect(p.state().daily).toEqual({ 'feature_used:columns_shown': '2030-01-01' })
+
+      setSystemTime(new Date('2030-01-02T00:00:01Z'))
+      await Promise.all([p.shown(), reloaded.shown()])
+      const next = await sent(p.telemetry)
+      expect(next.map(keyOf)).toEqual(['feature_used:columns_shown'])
+      expect(next[0]?.body.timestamp).toStartWith('2030-01-02')
+    } finally {
+      setSystemTime()
+    }
+  })
+
+  test('off forgets the id, and a restored snapshot brings the old choice and id back', async () => {
+    const p = bbPlugin(dbFile())
+    setSystemTime(new Date('2030-01-01T12:00:00Z'))
+    try {
+      await p.choose('on')
+      await p.shown()
+      await sent(p.telemetry)
+      const snapshot = { choice: p.choice, state: p.state() }
+
+      await p.choose('off')
+      await p.shown()
+      expect(await sent(p.telemetry)).toEqual([])
+      expect(p.state()).toEqual({ id: null, enabled: false, notice: 1, installed: false, daily: {} })
+
+      // A plugin rollback restores the settings and the database together.
+      p.choice = snapshot.choice
+      p.db.query('update telemetry set json = ?').run(JSON.stringify(snapshot.state))
+      setSystemTime(new Date('2030-01-02T12:00:00Z'))
+      await p.shown()
+      const got = await sent(p.telemetry)
+      expect(got.map(keyOf)).toEqual(['feature_used:columns_shown'])
+      expect(got[0]?.body.distinct_id).toBe(snapshot.state.id)
+    } finally {
+      setSystemTime()
+    }
+  })
+
+  test('the host switch, BB_TELEMETRY, DO_NOT_TRACK, CI and prerelease builds send nothing', async () => {
+    const cases: Parameters<typeof bbPlugin>[1][] = [
+      { host: false },
+      { env: { BB_TELEMETRY: 'false' } },
+      { env: { DO_NOT_TRACK: '1' } },
+      { env: { CI: 'true' } },
+      { version: '0.0.0' },
+      { version: '0.0.0-stage' },
+      { version: '1.3.0-stage.2' },
+      { version: '1.3.0-rc.1' },
+    ]
+    for (const opts of cases) {
+      const p = bbPlugin(dbFile(), opts)
+      await p.choose('on')
+      await p.shown()
+      expect(await sent(p.telemetry)).toEqual([])
+    }
+  })
+
+  test('a write that fails or throws means nothing is sent', async () => {
+    const file = dbFile()
+    const closed = bbPlugin(file)
+    await closed.choose('on')
+    closed.db.close() // the host closes handles on reload; a closed one throws
+    await closed.shown()
+    expect(await sent(closed.telemetry)).toEqual([])
+
+    expect(bbPlugin(file).telemetry.setEnabled(true)).toBe(true)
+    const ro = bbPlugin(file, { readonly: true }) // reads work, writes throw
+    expect(ro.telemetry.status()).toMatchObject({ enabled: true, reason: 'state' })
+    ro.telemetry.feature('columns_shown')
+    expect(await sent(ro.telemetry)).toEqual([])
+    expect(ro.telemetry.setEnabled(true)).toBe(false)
+
+    const refused = make({ mode: 'plugin', storage: { read: () => undefined, write: () => false } })
+    expect(refused.setEnabled(true)).toBe(false)
+    refused.feature('sync')
+    expect(await sent(refused)).toEqual([])
+  })
+
+  test('the storage replaces telemetry.json, and an async store does not type-check', () => {
+    const dir = newDir()
+    const saved: string[] = []
+    const t = make({ stateDir: dir, storage: { read: () => saved.at(-1), write: (json) => saved.push(json) > 0 } })
+    expect(t.setEnabled(true)).toBe(true)
+    expect(readdirSync(dir)).toEqual([])
+    expect(JSON.parse(saved[0] ?? '')).toMatchObject({ enabled: true, notice: 1 })
+    // @ts-expect-error bb.storage.kv is async: a write must be saved before the send.
+    const kv: TelemetryStorage = { read: async () => undefined, write: async () => true }
+    expect(kv).toBeDefined()
   })
 })
 
