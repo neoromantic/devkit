@@ -137,6 +137,7 @@ describe("init: fresh Bun project", () => {
         lint: "oxlint --deny-warnings",
         "check:knip": "knip",
         check: "bun run format:check && bun run lint && bun run check:knip",
+        test: "bun test --parallel",
       });
       expect(await Bun.file(join(dir, "knip.json")).text()).toBe(KNIP_CONFIG);
       expect(await Bun.file(join(dir, ".oxlintrc.json")).text()).toBe(OXLINT_CONFIG);
@@ -355,6 +356,7 @@ describe("init: existing project", () => {
       expect(notes).toContain("Run `bun run check` in it");
       expect(notes).toContain("uses: neoromantic/devkit/.github/workflows/ci-bun.yml@v1");
       expect(notes).toContain("`lint` runs `eslint .`: switch it to `oxlint --deny-warnings`.");
+      expect(notes).toContain("`test` runs `bun test` in one process: add `--parallel`");
 
       expect(
         (await init({ dir, dryRun: true })).changes.every(

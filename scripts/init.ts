@@ -419,6 +419,16 @@ export async function init(opts: InitOptions) {
     const knip = planKnip(oxc.pkg, knipVersion);
     const plan = { pkg: knip.pkg, notes: [...oxc.notes, ...knip.notes] };
     notes.push(...oxc.advice);
+    const test = plan.pkg.scripts?.test;
+    if (!test) {
+      plan.pkg.scripts = { ...plan.pkg.scripts, test: "bun test --parallel" };
+      plan.notes.push("scripts.test");
+    } else if (/\bbun test\b/.test(test) && !/--parallel\b/.test(test)) {
+      notes.push(
+        "`test` runs `bun test` in one process: add `--parallel` once each test owns its temp dir, port and environment: " +
+          "https://github.com/neoromantic/devkit/blob/main/docs/standards/testing.md#parallel-by-default",
+      );
+    }
     if (plan.notes.length) {
       changes.push({ path: "package.json", action: "update", note: plan.notes.join(", ") });
       if (write) {

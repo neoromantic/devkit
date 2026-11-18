@@ -64,7 +64,10 @@ package (`bun add -d github:neoromantic/devkit#v1`, then `bunx devkit init`).
   `@interfere/landmines` pinned, the `format`, `format:check` and `lint` scripts, `check` running
   the format check and lint first, and a `.oxlintrc.json` that extends the managed
   `.oxlintrc.devkit.jsonc`. Then `bun install` updates `bun.lock` for
-  `bun install --frozen-lockfile`.
+  `bun install --frozen-lockfile`;
+- for Bun: a `test` script that runs `bun test --parallel`, so tests run in parallel workers
+  from the start (see [the testing standard](docs/standards/testing.md#parallel-by-default)).
+  `bun test` fails while the repo has no test file.
 
 After `init`, run `bun run format` once and commit the result on its own, then fix what
 `bun run lint` reports.
@@ -87,6 +90,7 @@ workspace of internal packages, can drop `include` to run Knip's full default se
 | Renovate config in another place, `.github/SECURITY.md`…           | Adds no second copy                                                                      |
 | `check`, `lint`, `typecheck` scripts                               | `check` keeps them, runs `format:check` and an oxlint `lint` first and `check:knip` last |
 | `lint` or `format` with another tool (Biome, ESLint, Prettier)     | Keeps the script, leaves it out of `check` and says what to switch                       |
+| A `test` script                                                    | Keeps it; one that runs `bun test` without `--parallel` gets a note                      |
 | `knip`, `oxlint`, `oxfmt` in dependencies, a Knip or oxlint config | Keeps the versions and the config                                                        |
 | `AGENTS.md`                                                        | Adds the shared block and keeps the rest                                                 |
 | `CLAUDE.md` with rules, no `AGENTS.md` (as `bun init` writes)      | Moves the rules to `AGENTS.md` `## Project`; `CLAUDE.md` becomes `@AGENTS.md`            |
