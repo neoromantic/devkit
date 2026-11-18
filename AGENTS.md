@@ -67,8 +67,8 @@ Use the project section's native commands for checks, offline tests and builds:
 - `AGENTS.md` is the canonical instruction file. `CLAUDE.md` contains only `@AGENTS.md`.
 - Files marked "managed by devkit" (this block, `SECURITY.md`, `CONTRIBUTING.md`, the PR
   template, `.gitleaks.toml`, `.github/zizmor.yml`, `renovate.json`, `lefthook.yml`, the
-  CI stub, `.oxfmtrc.jsonc`, `.oxlintrc.devkit.jsonc` and the usage telemetry clients) are
-  synced from devkit. Change them there, not here.
+  CI stub, `.oxfmtrc.jsonc`, the `.oxlintrc.devkit*.jsonc` configs and the usage telemetry
+  clients) are synced from devkit. Change them there, not here.
 
 <!-- /devkit:agents -->
 

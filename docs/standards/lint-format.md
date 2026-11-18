@@ -11,7 +11,11 @@ own tools.
 - **oxfmt** with its defaults: 100 columns, double quotes, semicolons, sorted `package.json`
   keys. It formats every file type it supports: JS, TS, JSON, Markdown, YAML, TOML, CSS, HTML.
 - **oxlint**: the `correctness` category of the `typescript`, `unicorn`, `oxc` and `import`
-  plugins, as errors.
+  plugins, as errors, plus a few bug-finding rules oxlint files elsewhere: `eqeqeq` (`== null`
+  allowed), `no-fallthrough`, `array-callback-return`, `no-self-compare`, `no-case-declarations`,
+  `no-prototype-builtins`, `no-constructor-return` and `typescript/ban-ts-comment`.
+  `no-unused-vars` allows names that start with `_` and keys left out by object rest
+  destructuring.
 - **landmines**: the full `recommended` set as errors: the `landmines-testing` rules,
   `landmines-style/no-comments`, `landmines-structure/*` and
   `landmines-types/no-explicit-return-types`. `landmines-structure/package-exports` needs
@@ -29,6 +33,19 @@ The landmines rules run as oxlint JS plugins and need Node 22.18 or later on `PA
 is no `node` at all, `bun run` stands in for it. `ci-bun` installs Node 24 on runners with
 an older one.
 
+## React
+
+React repos also extend the managed `.oxlintrc.devkit.react.jsonc`:
+`"extends": ["./.oxlintrc.devkit.jsonc", "./.oxlintrc.devkit.react.jsonc"]`. It adds the
+`correctness` rules of the `react` and `jsx-a11y` plugins, which include the hook rules
+`eslint-plugin-react-hooks` recommends (`exhaustive-deps`, `set-state-in-effect`, `purity`,
+`refs`, `immutability`), and turns on `rules-of-hooks`, which oxlint files under pedantic.
+`jsx-a11y/control-has-associated-label` and `prefer-tag-over-role` stay off, as in jsx-a11y's own
+recommended set. Framework rules such as oxlint's `nextjs` plugin stay in the repo's
+`.oxlintrc.json`: they flag plain `<img>` and `<a>` in any React code.
+
+oxlint's `jest` and `vitest` plugins skip test files that import from `bun:test`.
+
 ## Where it runs
 
 - `bun run format` runs `oxfmt` and formats the repo in place.
@@ -42,12 +59,13 @@ an older one.
 
 ## Where the config lives
 
-| File                     | Owner                                                                               |
-| ------------------------ | ----------------------------------------------------------------------------------- |
-| `.oxfmtrc.jsonc`         | devkit (managed): the shared oxfmt config.                                          |
-| `.oxlintrc.devkit.jsonc` | devkit (managed): the shared oxlint config.                                         |
-| `.oxlintrc.json`         | The repo: `extends` the shared config and holds this repo's exceptions.             |
-| `.prettierignore`        | The repo, if needed: paths oxfmt leaves alone: byte-exact fixtures, vendored files. |
+| File                           | Owner                                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------------- |
+| `.oxfmtrc.jsonc`               | devkit (managed): the shared oxfmt config.                                          |
+| `.oxlintrc.devkit.jsonc`       | devkit (managed): the shared oxlint config.                                         |
+| `.oxlintrc.devkit.react.jsonc` | devkit (managed), React repos only: the shared React rules.                         |
+| `.oxlintrc.json`               | The repo: `extends` the shared config and holds this repo's exceptions.             |
+| `.prettierignore`              | The repo, if needed: paths oxfmt leaves alone: byte-exact fixtures, vendored files. |
 
 `devkit init` sets all of this up in a Bun repo: the pinned `oxlint`, `oxfmt` and
 `@interfere/landmines` devDependencies, the `format`, `format:check` and `lint` scripts,
