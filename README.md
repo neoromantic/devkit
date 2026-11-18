@@ -36,7 +36,7 @@ Python and Go repos keep their native tools.
 | `templates/`                      | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml` (public and private), `.oxfmtrc.jsonc`, `.oxlintrc.devkit.jsonc`, `.oxlintrc.devkit.react.jsonc` |
 | `templates/telemetry/`            | Single-file usage telemetry clients for TypeScript, Go and Python, with no dependencies                                                                                                                                                          |
 | `renovate/`                       | Renovate presets: `default` and `maintenance` (no majors)                                                                                                                                                                                        |
-| `docs/standards/`                 | README, docs, product content, paid readiness, delivery, Homebrew, agent-instruction, security, usage telemetry, code patterns, testing, and lint and format standards                                                                           |
+| `docs/standards/`                 | README, docs, product content, paid readiness, delivery, Homebrew, agent-instruction, security, usage telemetry, code patterns, testing, CI speed, and lint and format standards                                                                 |
 
 ## Use it in a repo
 
@@ -64,7 +64,10 @@ package (`bun add -d github:neoromantic/devkit#v1`, then `bunx devkit init`).
   `@interfere/landmines` pinned, the `format`, `format:check` and `lint` scripts, `check` running
   the format check and lint first, and a `.oxlintrc.json` that extends the managed
   `.oxlintrc.devkit.jsonc`. Then `bun install` updates `bun.lock` for
-  `bun install --frozen-lockfile`.
+  `bun install --frozen-lockfile`;
+- for Bun: a `test` script that runs `bun test --parallel`, so tests run in parallel workers
+  from the start (see [the testing standard](docs/standards/testing.md#parallel-by-default)).
+  `bun test` fails while the repo has no test file.
 
 After `init`, run `bun run format` once and commit the result on its own, then fix what
 `bun run lint` reports.
@@ -87,6 +90,7 @@ workspace of internal packages, can drop `include` to run Knip's full default se
 | Renovate config in another place, `.github/SECURITY.md`…           | Adds no second copy                                                                      |
 | `check`, `lint`, `typecheck` scripts                               | `check` keeps them, runs `format:check` and an oxlint `lint` first and `check:knip` last |
 | `lint` or `format` with another tool (Biome, ESLint, Prettier)     | Keeps the script, leaves it out of `check` and says what to switch                       |
+| A `test` script                                                    | Keeps it; one that runs `bun test` without `--parallel` gets a note                      |
 | `knip`, `oxlint`, `oxfmt` in dependencies, a Knip or oxlint config | Keeps the versions and the config                                                        |
 | `AGENTS.md`                                                        | Adds the shared block and keeps the rest                                                 |
 | `CLAUDE.md` with rules, no `AGENTS.md` (as `bun init` writes)      | Moves the rules to `AGENTS.md` `## Project`; `CLAUDE.md` becomes `@AGENTS.md`            |
@@ -168,7 +172,13 @@ merges; use auto-merge where available and report any pending checks.
 
 `ci-python.yml` inputs: `python-version` (JSON list; `""` means `.python-version`), `os`,
 `working-directory`, `ruff`, `test-command` (default `pytest -q`), `test-with` (extra packages),
-`persistent-venv` (default off). Without a ruff of its own, a project gets ruff 0.17.5.
+`persistent-venv` (default off). Without a ruff of its own, a project gets ruff 0.17.5. The
+Python stub runs one Python, from `.python-version`, and its tests in parallel workers:
+`test-with: pytest-xdist` and `test-command: pytest -q -n auto`.
+
+What a pull request runs, which jobs it skips and when a cache is worth it are in
+[the CI speed standard](docs/standards/ci-speed.md): one runtime version per language on pull
+requests, other versions and platforms after merge, on a schedule or on request.
 
 `hygiene.yml` inputs: `actionlint`, `zizmor`, `gitleaks`, `boundary-scan` (all on), `devkit-ref`,
 `runner` (JSON label array, default `["ubuntu-latest"]`), `zizmor-path` (default `.`), and

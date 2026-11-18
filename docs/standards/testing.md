@@ -7,6 +7,16 @@ How repos that use devkit test. The lint rules that enforce part of it are in
 
 - The behaviour callers depend on, where a regression would show: the requests a client sends,
   output formats, stored data, route and CLI contracts, errors returned.
+- Each test names the behaviour it protects, and a believable bug in that behaviour makes it
+  fail. A test that stays green when the behaviour breaks, or fails on a harmless refactor,
+  proves nothing.
+- One test owns each contract: the strongest one. Before adding a test for a fix, find the owner
+  and strengthen it; write a new test only when nothing owns the contract.
+- No assertion that another assertion already implies, no second test of the same contract, and
+  no test that restates the implementation: the same constants, the same branches, the internal
+  calls it makes.
+- Removing and consolidating tests is a normal part of a change, not a risk to avoid. The only
+  test of a contract goes only together with its replacement.
 - No tests that only check that a module imports, a name is exported or a type compiles. The
   same goes for Python.
 - Tests run offline and use made-up data. Live tests are opt-in, selected by a file suffix, and
@@ -70,6 +80,55 @@ the database as a parameter.
   conftest) points every state directory at a temp dir, turns telemetry off and refuses to run
   when production database or API variables are set.
 - In CI, `TMPDIR` is the runner's temp dir (`ci-bun` and `ci-python` set it).
+
+## Parallel by default
+
+- Suites run in parallel workers: `bun test --parallel`, `pytest -n auto` with pytest-xdist
+  (`uv run --with pytest-xdist pytest -q -n auto`, or `test-with: pytest-xdist` in `ci-python`),
+  `go test ./...` as it is. The `test` script or documented test command is the parallel one, so
+  local runs and CI match. Tests pass in any order and on any worker.
+- Other files run at the same time, so every test owns its state: a temp dir from `mkdtemp`
+  (`tmp_path` in pytest, `t.TempDir()` in Go), a server on port 0 that the test asks for its real
+  port (`Bun.serve({ port: 0 })`, `httptest.NewServer`), its own database file and its own
+  environment. No fixed paths, fixed ports or output files that two tests share. A preload or
+  conftest that moves state to a temp dir makes a new one per worker, never a fixed folder.
+- `bun test --parallel` implies `--isolate`: each file gets fresh globals and modules, and the
+  workers share only what is outside the process, such as files, ports and databases.
+- pytest-xdist workers are separate processes: a session-scoped fixture runs once per worker.
+  Work that must happen once per run, such as a build, runs before pytest. Debug one test
+  serially with `-n 0`.
+- Go runs packages in parallel processes. Tests inside a package run one at a time unless they
+  call `t.Parallel()`, which `t.Setenv` and `t.Chdir` refuse.
+- Workers share the CPU, so a test that runs a heavy tool in its body, such as a compiler or a
+  linter, slows down under them and can hit the test timeout. Run the tool once in `beforeAll`
+  with its time budget and assert the result in the tests.
+- A test that fails only in parallel shares state with another test. Make it own its state;
+  never exclude it, mark it serial or rerun it.
+- A shared resource that can't be per test, such as a server that is slow to start, is one per
+  worker, named after `BUN_TEST_WORKER_ID` or `PYTEST_XDIST_WORKER`.
+
+## Cleanup campaign
+
+A repo-wide test cleanup, one subsystem at a time. Hand this section to whoever runs it.
+
+1. Record the starting point from real CI runs: the test step's time, the number of tests and
+   the lines of test code.
+2. Pick one subsystem. Read its production code first, then its tests, and name its contracts:
+   what callers, users and stored data depend on.
+3. Keep a ledger outside the repo, one line per test: the contract it protects, a believable bug
+   it catches, and a verdict. The verdict is keep (the owner), merge into the owner, fix, or
+   delete as a duplicate, implied, a restatement of the code or proof of nothing.
+4. Keep the strongest test as each contract's owner and move what the others add into it. A
+   contract without a test gets one; a weak owner is strengthened before anything else goes.
+5. Prove each owner: break the behaviour in the production code, watch the owner fail, restore
+   the code. A test that stays green is fixed or deleted.
+6. Never delete the only guard of a contract, and never choose tests by their runtime. A flaky
+   test shares state or waits on time: fix the cause.
+7. Run the suite in parallel workers as you go and fix the shared state you meet.
+8. One narrow pull request per subsystem. Its description summarises the ledger: contracts,
+   owners, what went and why.
+9. At the end, report the test step's time, the number of tests and the lines of test code
+   before and after, with run links.
 
 ## Running checks
 

@@ -5,12 +5,15 @@
 # ruff and pytest come from the project's dev dependencies when they are there;
 # otherwise ruff runs through uvx and the test command runs as given.
 #
+# One Python, from .python-version, and tests in parallel workers. A version matrix runs after
+# merge, on a schedule or on request (docs/standards/ci-speed.md).
+#
 # Usage (see templates/ci.python.yml):
 #   jobs:
 #     build:
 #       uses: neoromantic/devkit/.github/workflows/ci-python.yml@v1
 #       permissions: { contents: read }
-#       with: { python-version: '["3.11","3.14"]' }
+#       with: { test-with: pytest-xdist, test-command: pytest -q -n auto }
 name: ci-python
 
 on:
