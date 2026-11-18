@@ -162,3 +162,9 @@ repos:
     profile: bun
     description: Answer waiting subthreads and inspect failures beside their parent. Optional Responsibilities adds unread-result columns.
     required_checks: [ci]
+
+  bb-plugin-voice-reactions:
+    profile: bun
+    description: "BB plugin: a short spoken reaction to what you write to your agents."
+    topics: [bb, bb-plugin, bun, sergeybaus-oss]
+    required_checks: [ci]
