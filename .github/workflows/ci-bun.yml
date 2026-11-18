@@ -3,6 +3,9 @@
 # Runs the script contract from package.json, skipping scripts that don't exist:
 #   check (or lint + typecheck) -> build -> pack (when pack: true) -> test -> test:e2e (when e2e: true)
 #
+# A repo on the shared lint and format standard runs oxfmt and oxlint inside `check`
+# (docs/standards/lint-format.md); this workflow only makes sure Node is new enough for them.
+#
 # pack: true checks the release artifact without publishing it: `bun pm pack`, install the tarball
 # in a clean temp project outside the checkout (fresh HOME, allowlisted environment, no job
 # secrets), then run every CLI from package.json `bin` with pack-args. Each run must exit 0.
@@ -30,7 +33,7 @@ on:
       bun-version:
         description: Bun version. Empty means .bun-version, then packageManager in package.json, then latest
         type: string
-        default: ''
+        default: ""
       canary:
         description: Use Bun canary (for scheduled early-warning runs)
         type: boolean
@@ -46,7 +49,7 @@ on:
       pack-args:
         description: 'JSON argv, or list of argv lists, run for every packed CLI. Empty means [["--help"]]'
         type: string
-        default: ''
+        default: ""
 
 permissions: {}
 
@@ -102,6 +105,29 @@ jobs:
 
       - name: Install
         run: bun install --frozen-lockfile
+
+      # The landmines rules of the shared lint standard are oxlint JS plugins, which need
+      # Node 22.18 or later. A repo on the standard (.oxlintrc.devkit.jsonc) gets Node 24 when
+      # the runner has none or an older one; other repos skip this.
+      - name: Resolve Node for oxlint
+        id: node
+        run: |
+          setup=false
+          if [ -f .oxlintrc.devkit.jsonc ]; then
+            version="$(node -p process.versions.node 2>/dev/null || echo 0.0.0)"
+            IFS=. read -r major minor _ <<< "$version"
+            if [ "$major" -lt 22 ] || { [ "$major" -eq 22 ] && [ "$minor" -lt 18 ]; }; then
+              setup=true
+            fi
+            echo "Node $version on the runner; setup: $setup"
+          fi
+          echo "setup=$setup" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.node.outputs.setup == 'true'
+        with:
+          node-version: 24
+          package-manager-cache: false
 
       - name: Check
         run: |

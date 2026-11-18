@@ -42,6 +42,9 @@ profiles:
       .github/workflows/ci.yml: ci.bun.yml
       CONTRIBUTING.md: CONTRIBUTING.md
       .github/PULL_REQUEST_TEMPLATE.md: PULL_REQUEST_TEMPLATE.md
+      # The shared lint and format standard (docs/standards/lint-format.md).
+      .oxfmtrc.jsonc: .oxfmtrc.jsonc
+      .oxlintrc.devkit.jsonc: .oxlintrc.devkit.jsonc
   python:
     files:
       .github/workflows/ci.yml: ci.python.yml
@@ -117,6 +120,9 @@ repos:
     topics: [github-actions, reusable-workflows, lefthook, renovate, gitleaks, developer-tools]
     # devkit runs its hooks from its own lefthook.yml, not through a remote.
     exclude: [lefthook.yml]
+    files:
+      .oxfmtrc.jsonc: .oxfmtrc.jsonc
+      .oxlintrc.devkit.jsonc: .oxlintrc.devkit.jsonc
 
   ai-usage:
     profile: go
@@ -126,6 +132,9 @@ repos:
     required_checks: [ci]
     files:
       internal/telemetry/telemetry.go: telemetry/telemetry.go
+      # The BB plugin in bb/ follows the shared lint and format standard.
+      bb/.oxfmtrc.jsonc: .oxfmtrc.jsonc
+      bb/.oxlintrc.devkit.jsonc: .oxlintrc.devkit.jsonc
 
   bb-plugin-provider-retry-advanced:
     profile: bun

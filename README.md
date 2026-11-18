@@ -8,29 +8,33 @@ secret and privacy scanning, a Renovate preset, community files and the shared b
 `AGENTS.md`. Repos stay independent: each one gets a thin stub or a synced file, never a
 dependency on a local checkout.
 
-devkit sets no code style. There are no shared Biome, ESLint, ruff-format or tsconfig presets,
-and nothing here reformats a repo.
+JavaScript and TypeScript repos share one code style: [oxfmt](https://oxc.rs/docs/guide/usage/formatter)
+with its defaults, and [oxlint](https://oxc.rs/docs/guide/usage/linter) with the
+[landmines](https://github.com/interfere-inc/landmines) rules. devkit owns both configs; a repo
+keeps only its own exceptions. See [the lint and format standard](docs/standards/lint-format.md).
+Python and Go repos keep their native tools.
 
 ## What's inside
 
-| Path | What it is |
-|---|---|
-| `.github/workflows/ci-bun.yml` | Reusable CI for Bun: install, `check` (or `lint` + `typecheck`), `build`, `test`, `test:e2e` |
-| `.github/workflows/ci-python.yml` | Reusable CI for Python with uv: `uv sync`, `ruff check`, `pytest` |
-| `.github/workflows/hygiene.yml` | Reusable checks: actionlint, zizmor, gitleaks, privacy scan of added lines |
-| `.github/workflows/self.yml` | devkit's own CI, which runs the workflows above on devkit itself |
-| `lefthook/lefthook.yml` | Shared pre-commit hooks: gitleaks and the privacy scan |
-| `scripts/init.ts` | `devkit init`: sets up the repo you are in, including Knip for Bun |
-| `scripts/privacy-scan.ts` | Finds phone numbers, home paths and your private markers; prints only `path:line` |
-| `scripts/sync.ts` | Renders managed files and the AGENTS block into every repo; `--write` opens PRs |
-| `scripts/repo-settings.ts` | Diffs GitHub repo settings (description, topics, wiki, secret scanning, private vulnerability reporting, the `main` ruleset…) against `repos.yml`; `--apply` fixes them |
-| `scripts/status.ts` | On-demand default-branch SHA, checks for that SHA and latest published stable release |
-| `repos.yml` | The repos devkit manages, their profile, description, topics and settings |
-| `agents/AGENTS.shared.md` | The shared block for each repo's `AGENTS.md` |
-| `templates/` | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml` |
-| `templates/telemetry/` | Single-file usage telemetry clients for TypeScript, Go and Python, with no dependencies |
-| `renovate/` | Renovate presets: `default` and `maintenance` (no majors) |
-| `docs/standards/` | README, product content, paid readiness, delivery, Homebrew, agent-instruction, security and usage telemetry standards |
+| Path                              | What it is                                                                                                                                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/ci-bun.yml`    | Reusable CI for Bun: install, `check` (or `lint` + `typecheck`), `build`, `test`, `test:e2e`; Node 22.18+ for the shared lint                                                               |
+| `.github/workflows/ci-python.yml` | Reusable CI for Python with uv: `uv sync`, `ruff check`, `pytest`                                                                                                                           |
+| `.github/workflows/hygiene.yml`   | Reusable checks: actionlint, zizmor, gitleaks, privacy scan of added lines                                                                                                                  |
+| `.github/workflows/self.yml`      | devkit's own CI, which runs the workflows above on devkit itself                                                                                                                            |
+| `lefthook/lefthook.yml`           | Shared pre-commit hooks: gitleaks, the privacy scan, and oxfmt and oxlint on staged files in repos on the shared standard                                                                   |
+| `scripts/init.ts`                 | `devkit init`: sets up the repo you are in, including Knip, oxfmt and oxlint for Bun                                                                                                        |
+| `scripts/oxc-staged.ts`           | The pre-commit check: oxfmt and oxlint on staged files, from each package that has the shared config                                                                                        |
+| `scripts/privacy-scan.ts`         | Finds phone numbers, home paths and your private markers; prints only `path:line`                                                                                                           |
+| `scripts/sync.ts`                 | Renders managed files and the AGENTS block into every repo; `--write` opens PRs                                                                                                             |
+| `scripts/repo-settings.ts`        | Diffs GitHub repo settings (description, topics, wiki, secret scanning, private vulnerability reporting, the `main` ruleset…) against `repos.yml`; `--apply` fixes them                     |
+| `scripts/status.ts`               | On-demand default-branch SHA, checks for that SHA and latest published stable release                                                                                                       |
+| `repos.yml`                       | The repos devkit manages, their profile, description, topics and settings                                                                                                                   |
+| `agents/AGENTS.shared.md`         | The shared block for each repo's `AGENTS.md`                                                                                                                                                |
+| `templates/`                      | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml`, `.oxfmtrc.jsonc`, `.oxlintrc.devkit.jsonc` |
+| `templates/telemetry/`            | Single-file usage telemetry clients for TypeScript, Go and Python, with no dependencies                                                                                                     |
+| `renovate/`                       | Renovate presets: `default` and `maintenance` (no majors)                                                                                                                                   |
+| `docs/standards/`                 | README, product content, paid readiness, delivery, Homebrew, agent-instruction, security, usage telemetry, and lint and format standards                                                    |
 
 ## Use it in a repo
 
@@ -53,7 +57,15 @@ package (`bun add -d github:neoromantic/devkit#v1`, then `bunx devkit init`).
   a later `sync` finds nothing to change;
 - for Bun: `knip` pinned as a devDependency (the version devkit tests with), a `knip.json`
   baseline, a `check:knip` script, and `check` running it, so `ci-bun` runs Knip through
-  `check`. Then `bun install` updates `bun.lock` for `bun install --frozen-lockfile`.
+  `check`;
+- for Bun: the [lint and format standard](docs/standards/lint-format.md): `oxlint`, `oxfmt` and
+  `@interfere/landmines` pinned, the `format`, `format:check` and `lint` scripts, `check` running
+  the format check and lint first, and a `.oxlintrc.json` that extends the managed
+  `.oxlintrc.devkit.jsonc`. Then `bun install` updates `bun.lock` for
+  `bun install --frozen-lockfile`.
+
+After `init`, run `bun run format` once and commit the result on its own, then fix what
+`bun run lint` reports.
 
 A Python repository that already calls the shared Python workflow can omit `pyproject.toml`.
 Existing Renovate presets and project-specific options are preserved during setup.
@@ -64,16 +76,17 @@ API is never flagged.
 
 `init` keeps what the repo already has:
 
-| Already there | What `init` does |
-|---|---|
-| A file without the `managed by devkit` mark | Keeps it (`--adopt` replaces it) |
-| A CI workflow (`ci`, `test`, `build`… or one that runs checks) | Adds no `ci.yml` and prints the job to add |
-| Husky, pre-commit, simple-git-hooks or another lefthook file | Adds no `lefthook.yml` |
-| Renovate config in another place, `.github/SECURITY.md`… | Adds no second copy |
-| `check`, `lint`, `typecheck` scripts | `check` keeps them and runs `check:knip` last |
-| `knip` in dependencies, a Knip config | Keeps the version and the config |
-| `AGENTS.md` | Adds the shared block and keeps the rest |
-| `CLAUDE.md` with rules, no `AGENTS.md` (as `bun init` writes) | Moves the rules to `AGENTS.md` `## Project`; `CLAUDE.md` becomes `@AGENTS.md` |
+| Already there                                                      | What `init` does                                                                         |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| A file without the `managed by devkit` mark                        | Keeps it (`--adopt` replaces it)                                                         |
+| A CI workflow (`ci`, `test`, `build`… or one that runs checks)     | Adds no `ci.yml` and prints the job to add                                               |
+| Husky, pre-commit, simple-git-hooks or another lefthook file       | Adds no `lefthook.yml`                                                                   |
+| Renovate config in another place, `.github/SECURITY.md`…           | Adds no second copy                                                                      |
+| `check`, `lint`, `typecheck` scripts                               | `check` keeps them, runs `format:check` and an oxlint `lint` first and `check:knip` last |
+| `lint` or `format` with another tool (Biome, ESLint, Prettier)     | Keeps the script, leaves it out of `check` and says what to switch                       |
+| `knip`, `oxlint`, `oxfmt` in dependencies, a Knip or oxlint config | Keeps the versions and the config                                                        |
+| `AGENTS.md`                                                        | Adds the shared block and keeps the rest                                                 |
+| `CLAUDE.md` with rules, no `AGENTS.md` (as `bun init` writes)      | Moves the rules to `AGENTS.md` `## Project`; `CLAUDE.md` becomes `@AGENTS.md`            |
 
 A Bun package with `bin` gets `pack: true` on its `ci-bun` job, so CI smoke-tests the packed
 CLI. `sync` adds it the same way, from the repo's own `package.json`. Libraries without `bin`
@@ -152,7 +165,10 @@ merges; use auto-merge where available and report any pending checks.
 ### Git hooks
 
 Install [lefthook](https://lefthook.dev) and [gitleaks](https://github.com/gitleaks/gitleaks)
-(`brew install lefthook gitleaks`), plus [Bun](https://bun.sh) for the privacy scan. Then add
+(`brew install lefthook gitleaks`), plus [Bun](https://bun.sh) for the privacy scan and the
+oxfmt and oxlint check of staged files. That check runs only from folders with the managed
+`.oxfmtrc.jsonc` or `.oxlintrc.devkit.jsonc`, with the tools installed there; it does nothing
+in other repos. Then add
 the remote to the repo's `lefthook.yml` (the managed `templates/lefthook.yml` is exactly this):
 
 ```yaml
@@ -189,8 +205,9 @@ bunx github:neoromantic/devkit#v1 privacy-scan --all
 Private markers live in `~/.config/devkit/private-markers` (mode `0600`, never in a repo):
 one string or `/regex/flags` per line. A line that is fine on purpose takes a
 `privacy-scan:allow` comment; generated fixtures that can't take one go in the repo's
-`.privacy-scan-ignore` (path globs, optionally limited to some rule kinds). See
-[docs/standards/security.md](docs/standards/security.md).
+`.privacy-scan-ignore` (path globs, optionally limited to some rule kinds). The scan prints
+only `path:line` for each hit, never the matched text, and exits 0 when clean, 1 on hits and 2
+on a usage or setup error. See [docs/standards/security.md](docs/standards/security.md).
 
 ### Usage telemetry
 
@@ -202,9 +219,9 @@ blocks or prints, swallows its own errors and is off with `DO_NOT_TRACK=1`,
 in `repos.yml`, so `sync.ts` keeps the copy identical to the template:
 
 ```yaml
-  telegram-sync-cli:
-    files:
-      src/telemetry/client.ts: telemetry/telemetry.ts
+telegram-sync-cli:
+  files:
+    src/telemetry/client.ts: telemetry/telemetry.ts
 ```
 
 A BB plugin passes the TypeScript client a `storage` adapter over its own SQLite database and
@@ -292,7 +309,8 @@ Paid offers also follow [paid readiness](docs/standards/paid-readiness.md).
 
 ```sh
 bun install
-bun run check   # tsc --noEmit, then Knip
+bun run format  # oxfmt
+bun run check   # oxfmt --check, oxlint, tsc --noEmit, then Knip
 bun run test    # bun test, offline
 actionlint && uvx zizmor --offline .
 ```

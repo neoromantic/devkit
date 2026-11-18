@@ -10,11 +10,11 @@ anything, or fail it: every error inside the client is swallowed.
 
 ## Clients
 
-| Language | Template | Used by |
-|---|---|---|
+| Language                  | Template                           | Used by                       |
+| ------------------------- | ---------------------------------- | ----------------------------- |
 | TypeScript (Bun and Node) | `templates/telemetry/telemetry.ts` | CLIs, server code, BB plugins |
-| Go | `templates/telemetry/telemetry.go` | CLIs, daemons |
-| Python 3.11+ | `templates/telemetry/telemetry.py` | plugins, desktop apps |
+| Go                        | `templates/telemetry/telemetry.go` | CLIs, daemons                 |
+| Python 3.11+              | `templates/telemetry/telemetry.py` | plugins, desktop apps         |
 
 A repo lists the file under its own `files` in `repos.yml` (target path → template), and
 `scripts/sync.ts` keeps it identical to the template. Do not edit the copy in a product; change
@@ -69,12 +69,12 @@ User-Agent: devkit-telemetry/1 (<product>/<version>)
 
 ## Events
 
-| Event | When | Extra properties |
-|---|---|---|
-| `app_installed` | The first time this install sends anything | — |
-| `app_started` | Each start of the product | — |
-| `feature_used` | A feature runs: a CLI subcommand path without arguments (`chats list`), an action in an app (`redact`), a plugin handler | `feature` |
-| `error_occurred` | A command or action fails | `error_type`, `error_message` |
+| Event            | When                                                                                                                     | Extra properties              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| `app_installed`  | The first time this install sends anything                                                                               | —                             |
+| `app_started`    | Each start of the product                                                                                                | —                             |
+| `feature_used`   | A feature runs: a CLI subcommand path without arguments (`chats list`), an action in an app (`redact`), a plugin handler | `feature`                     |
+| `error_occurred` | A command or action fails                                                                                                | `error_type`, `error_message` |
 
 `feature` values come from a fixed list in the product's code. Anything not on the list is sent
 as `other`. Feature names are lowercase words separated by spaces, dots or underscores.
@@ -91,16 +91,16 @@ code paths.
 
 ### Common properties
 
-| Property | Values |
-|---|---|
-| `product` | the product slug, the same as in `products.json` (`ai-usage`, `telegram-sync-cli`, `telesec`, `nothing-personal`, `amisleeping`) |
-| `$app_version` | the product's version |
+| Property             | Values                                                                                                                                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `product`            | the product slug, the same as in `products.json` (`ai-usage`, `telegram-sync-cli`, `telesec`, `nothing-personal`, `amisleeping`)                                                                                |
+| `$app_version`       | the product's version                                                                                                                                                                                           |
 | `$os`, `$os_version` | `macOS`, `Windows` or `Linux` (other systems in lowercase), and the OS version: the product version on macOS, `VERSION_ID` from `/etc/os-release` on Linux (else the kernel release), `10.0.<build>` on Windows |
-| `arch` | `arm64`, `x64` (also for `x86_64`, `amd64`) or what the runtime reports |
-| `runtime` | `go 1.25.3`, `bun 1.4.2`, `node 24.1.0`, `python 3.12.7` |
-| `channel` | how it was installed, set by the product: `homebrew`, `npm`, `binary`, `install-script`, `plugin`, `app`, `web`, `source` |
-| `mode` | how it runs: `interactive`, `agent`, `script`, `scheduled`, `daemon`, `app`, `plugin`, `server` |
-| `agent` | the AI agent running it, or absent: `claude-code`, `codex`, `cursor`, `gemini`, or the name in `AI_AGENT` |
+| `arch`               | `arm64`, `x64` (also for `x86_64`, `amd64`) or what the runtime reports                                                                                                                                         |
+| `runtime`            | `go 1.25.3`, `bun 1.4.2`, `node 24.1.0`, `python 3.12.7`                                                                                                                                                        |
+| `channel`            | how it was installed, set by the product: `homebrew`, `npm`, `binary`, `install-script`, `plugin`, `app`, `web`, `source`                                                                                       |
+| `mode`               | how it runs: `interactive`, `agent`, `script`, `scheduled`, `daemon`, `app`, `plugin`, `server`                                                                                                                 |
+| `agent`              | the AI agent running it, or absent: `claude-code`, `codex`, `cursor`, `gemini`, or the name in `AI_AGENT`                                                                                                       |
 
 `$os_version`, `channel` and `agent` are left out when empty (Go cannot read the Windows
 version without a subprocess, so it leaves `$os_version` out there).
@@ -131,7 +131,13 @@ chat or user ids, licence keys, hardware ids.
 Each product keeps `telemetry.json` in its own state directory:
 
 ```json
-{"id":"8b0e6c1a-3f0d-4a51-9a7e-2f1c5d9e4b77","enabled":null,"notice":1,"installed":true,"daily":{"app_started":"2026-10-28"}}
+{
+  "id": "8b0e6c1a-3f0d-4a51-9a7e-2f1c5d9e4b77",
+  "enabled": null,
+  "notice": 1,
+  "installed": true,
+  "daily": { "app_started": "2026-10-28" }
+}
 ```
 
 All three clients write this exact shape: compact JSON on one line ending in a newline, every
@@ -214,25 +220,25 @@ as `_` (`ai-usage` → `AI_USAGE`).
 
 ```ts
 const t = createTelemetry({
-  product: 'telegram-sync-cli',
-  version: '0.4.0',
-  envPrefix: 'TELEGRAM_SYNC_CLI',   // reads TELEGRAM_SYNC_CLI_TELEMETRY
-  stateDir: join(homedir(), '.telegram-sync-cli'),
-  channel: 'homebrew',
-  mode: undefined,                   // or 'scheduled' | 'daemon' | 'app' | 'plugin' | 'server' …
-  features: ['chats list', 'sync'],  // anything else becomes "other"
-  offCommand: 'tg telemetry off',
-  storage: undefined,                // TypeScript only: { read, write } instead of telemetry.json
-})
-t.noticeText()          // the notice while it is due, else null: for an app or plugin that shows it in its own UI
-t.showNotice()          // prints the notice once if it is due and stderr is a terminal or an agent runs it; returns whether it printed
-t.markNoticeSeen()      // for apps, plugins and install scripts that showed it themselves
-t.started()             // app_started (+ app_installed the first time)
-t.feature('chats list') // feature_used
-t.error(err)            // error_occurred
-await t.flush(500)      // before exit: waits up to 500 ms for requests already in flight
-t.status()              // { enabled, debug, reason, id, stateFile, endpoint }; id is null until there is one
-t.setEnabled(false)     // telemetry off / on; returns whether the state file was written
+  product: "telegram-sync-cli",
+  version: "0.4.0",
+  envPrefix: "TELEGRAM_SYNC_CLI", // reads TELEGRAM_SYNC_CLI_TELEMETRY
+  stateDir: join(homedir(), ".telegram-sync-cli"),
+  channel: "homebrew",
+  mode: undefined, // or 'scheduled' | 'daemon' | 'app' | 'plugin' | 'server' …
+  features: ["chats list", "sync"], // anything else becomes "other"
+  offCommand: "tg telemetry off",
+  storage: undefined, // TypeScript only: { read, write } instead of telemetry.json
+});
+t.noticeText(); // the notice while it is due, else null: for an app or plugin that shows it in its own UI
+t.showNotice(); // prints the notice once if it is due and stderr is a terminal or an agent runs it; returns whether it printed
+t.markNoticeSeen(); // for apps, plugins and install scripts that showed it themselves
+t.started(); // app_started (+ app_installed the first time)
+t.feature("chats list"); // feature_used
+t.error(err); // error_occurred
+await t.flush(500); // before exit: waits up to 500 ms for requests already in flight
+t.status(); // { enabled, debug, reason, id, stateFile, endpoint }; id is null until there is one
+t.setEnabled(false); // telemetry off / on; returns whether the state file was written
 ```
 
 `reason` names the rule that decided: `no-endpoint`, `do-not-track`, `env`, `ci`, `test`,
@@ -249,13 +255,13 @@ random or keyed id that is never an email or an account id; an empty id becomes 
 A BB plugin's server sends nothing until the user turns usage sharing on, and keeps the client
 state in the plugin's own database. Only the TypeScript client has the `storage` option.
 
-| Plugin repo (`product`) | `feature` | Sent when |
-|---|---|---|
-| `bb-plugin-subthread-columns` | `columns_shown` | a child column is at least partly in view, the document is visible and the BB window is active |
-| `bb-plugin-model-effort-badges` | `badge_displayed` | a model/effort badge is shown in the visible part of the active window |
-| `bb-plugin-provider-retry-advanced` | `retry_accepted` | core accepted an automatic retry (not that the turn recovered) |
-| `bb-plugin-ai-usage` | `panel_opened` | the user opened the AI Usage panel |
-| `bb-plugin-responsibilities` | set by its owner | |
+| Plugin repo (`product`)             | `feature`         | Sent when                                                                                      |
+| ----------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------- |
+| `bb-plugin-subthread-columns`       | `columns_shown`   | a child column is at least partly in view, the document is visible and the BB window is active |
+| `bb-plugin-model-effort-badges`     | `badge_displayed` | a model/effort badge is shown in the visible part of the active window                         |
+| `bb-plugin-provider-retry-advanced` | `retry_accepted`  | core accepted an automatic retry (not that the turn recovered)                                 |
+| `bb-plugin-ai-usage`                | `panel_opened`    | the user opened the AI Usage panel                                                             |
+| `bb-plugin-responsibilities`        | set by its owner  |                                                                                                |
 
 The plugin owner checks the actual trigger. `ai-usage` stays the CLI and menu bar app; the
 plugin is a separate product with its own install ID.
@@ -288,23 +294,31 @@ are asynchronous and cannot back `storage`; the type does not accept them.
 
 ```ts
 bb.storage.migrate(bb.storage.database(), [
-  'create table telemetry (id integer primary key check (id = 1), json text not null)',
-])
+  "create table telemetry (id integer primary key check (id = 1), json text not null)",
+]);
 const telemetry = createTelemetry({
-  product: 'bb-plugin-subthread-columns',
-  version,                      // from the plugin's package.json
-  stateDir: '',
+  product: "bb-plugin-subthread-columns",
+  version, // from the plugin's package.json
+  stateDir: "",
   storage: {
-    read: () => (bb.storage.database().prepare('select json from telemetry').get() as { json: string } | undefined)?.json,
+    read: () =>
+      (
+        bb.storage.database().prepare("select json from telemetry").get() as
+          | { json: string }
+          | undefined
+      )?.json,
     write: (json) => {
-      bb.storage.database().prepare('insert or replace into telemetry (id, json) values (1, ?)').run(json)
-      return true
+      bb.storage
+        .database()
+        .prepare("insert or replace into telemetry (id, json) values (1, ?)")
+        .run(json);
+      return true;
     },
   },
-  channel: 'plugin',
-  mode: 'plugin',
-  features: ['columns_shown'],
-})
+  channel: "plugin",
+  mode: "plugin",
+  features: ["columns_shown"],
+});
 ```
 
 **The choice reaches the client** at load and on every settings change, never from an event
@@ -313,18 +327,18 @@ setting. `sharing` is true only while the current choice is `on` and was saved; 
 could not be saved keeps it false until the next one is:
 
 ```ts
-let sharing = false
+let sharing = false;
 const apply = ({ usageSharing }: { usageSharing: string }) => {
-  sharing = telemetry.setEnabled(usageSharing === 'on') && usageSharing === 'on'
-}
-let changed = false
+  sharing = telemetry.setEnabled(usageSharing === "on") && usageSharing === "on";
+};
+let changed = false;
 const ready = settings.get().then((values) => {
-  if (!changed) apply(values)
-})
+  if (!changed) apply(values);
+});
 settings.onChange((next) => {
-  changed = true
-  apply(next)
-})
+  changed = true;
+  apply(next);
+});
 ```
 
 `onChange` applies the new choice at once, so an event already waiting sees it; a value read at
@@ -337,13 +351,13 @@ load never overrides a later change.
 
 ```ts
 async function columnsShown() {
-  await ready
-  const { generalSettings } = await bb.sdk.system.config()
-  if (!sharing) return
-  if (generalSettings.telemetryEnabled === false) return
-  if (/^\s*(0|off|false)\s*$/i.test(process.env.BB_TELEMETRY ?? '')) return
-  if (!/^\d+\.\d+\.\d+$/.test(version)) return
-  telemetry.feature('columns_shown')
+  await ready;
+  const { generalSettings } = await bb.sdk.system.config();
+  if (!sharing) return;
+  if (generalSettings.telemetryEnabled === false) return;
+  if (/^\s*(0|off|false)\s*$/i.test(process.env.BB_TELEMETRY ?? "")) return;
+  if (!/^\d+\.\d+\.\d+$/.test(version)) return;
+  telemetry.feature("columns_shown");
 }
 ```
 

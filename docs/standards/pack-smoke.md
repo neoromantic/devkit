@@ -21,9 +21,9 @@ jobs:
       pack-args: '[["--help"],["--version"]]'
 ```
 
-| Input | Default | Meaning |
-|---|---|---|
-| `pack` | `false` | Run the pack smoke test |
+| Input       | Default                          | Meaning                                                  |
+| ----------- | -------------------------------- | -------------------------------------------------------- |
+| `pack`      | `false`                          | Run the pack smoke test                                  |
 | `pack-args` | `''`, which means `[["--help"]]` | JSON argv list, or list of argv lists, run for every bin |
 
 Each argv list is passed to the CLI as separate arguments, without a shell. Spaces, quotes and
@@ -51,6 +51,7 @@ module. Add an argv that reaches the rest of the CLI, such as a subcommand's `--
 - The helper, `scripts/pack-smoke.ts`, comes from the exact devkit revision the workflow was
   called at (`job.workflow_repository` at `job.workflow_sha`). It is moved to the runner temp dir
   and its checkout is removed before packing, so it never ends up in the tarball.
+  It is one self-contained file that imports only Node builtins and Bun.
 
 ## Constraints
 
@@ -66,3 +67,6 @@ module. Add an argv that reaches the rest of the CLI, such as a subcommand's `--
 ```bash
 DEVKIT_PACK_ARGS='[["--help"],["--version"]]' bunx github:neoromantic/devkit#v1 pack-smoke .
 ```
+
+`DEVKIT_PACK_ARGS` takes the same JSON as `pack-args` (default `[["--help"]]`). With no
+directory argument, `DEVKIT_PACK_DIR` names the package directory (default: the current one).

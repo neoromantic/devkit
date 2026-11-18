@@ -18,10 +18,12 @@
 # <repo>
 
 <!-- devkit:agents v1 -->
+
 …shared rules, synced from devkit/agents/AGENTS.shared.md…
 <!-- /devkit:agents -->
 
 ## Project
+
 …project rules: architecture, commands, gotchas…
 ```
 

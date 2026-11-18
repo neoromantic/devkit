@@ -21,7 +21,13 @@
     {
       "description": "All non-major runtime updates in one PR",
       "matchUpdateTypes": ["minor", "patch"],
-      "matchDepTypes": ["dependencies", "peerDependencies", "optionalDependencies", "project.dependencies", "require"],
+      "matchDepTypes": [
+        "dependencies",
+        "peerDependencies",
+        "optionalDependencies",
+        "project.dependencies",
+        "require"
+      ],
       "groupName": "non-major dependencies",
       "groupSlug": "non-major"
     },

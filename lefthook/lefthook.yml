@@ -1,5 +1,7 @@
 # managed by devkit v1: shared git hooks, pulled into each repo through lefthook `remotes`.
 # Needs gitleaks and Bun on PATH. Private markers: ~/.config/devkit/private-markers (mode 0600).
+# oxc.ts checks staged files with oxfmt and oxlint only in repos on the shared lint and format
+# standard (docs/standards/lint-format.md); elsewhere it does nothing.
 pre-commit:
   parallel: true
   commands:
@@ -7,4 +9,6 @@ pre-commit:
       run: gitleaks git --pre-commit --staged --redact --no-banner --verbose
   scripts:
     "privacy-scan.ts":
+      runner: bun
+    "oxc.ts":
       runner: bun

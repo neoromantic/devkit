@@ -1,4 +1,4 @@
-// Tests for templates/telemetry/telemetry.go. tests/telemetry-go.test.ts copies the template next
+// Tests for templates/telemetry/telemetry.go. test/telemetry-go.test.ts copies the template next
 // to this file in a temp module and runs go test, go vet and gofmt there.
 package telemetry
 

@@ -1,0 +1,37 @@
+import { beforeAll, describe, expect, test } from "bun:test";
+import { join } from "node:path";
+
+const root = join(import.meta.dir, "..");
+
+function findPython() {
+  for (const name of ["python3", "python"]) {
+    const path = Bun.which(name);
+    if (!path) continue;
+    const probe = Bun.spawnSync([path, "-c", "import sys; print(sys.version_info >= (3, 11))"]);
+    if (probe.exitCode === 0 && probe.stdout.toString().trim() === "True") return path;
+  }
+  return null;
+}
+
+const python = findPython();
+if (!python) console.warn("telemetry.py tests skipped: no python3 >= 3.11 on PATH");
+
+describe.skipIf(!python)("telemetry.py", () => {
+  let code: number | null = null;
+  let output = "";
+
+  beforeAll(() => {
+    const run = Bun.spawnSync(
+      [python ?? "python3", "-B", "-m", "unittest", "discover", "-s", "test/telemetry/python"],
+      { cwd: root, env: { PATH: process.env.PATH ?? "" }, stdout: "pipe", stderr: "pipe" },
+    );
+    code = run.exitCode;
+    output = run.stderr.toString();
+  }, 120_000);
+
+  test("passes its unittest suite", () => {
+    if (code !== 0) console.error(output);
+    expect(code).toBe(0);
+    expect(output).toMatch(/\nOK/);
+  });
+});
