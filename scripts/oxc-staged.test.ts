@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -17,10 +17,10 @@ import { withPack } from "./sync";
 
 const OXFMT = join(ROOT, "node_modules", ".bin", "oxfmt");
 
-async function withDir(fn: (dir: string) => Promise<void>) {
+async function withDir<T>(fn: (dir: string) => Promise<T>) {
   const dir = await mkdtemp(join(tmpdir(), "devkit-oxc-test-"));
   try {
-    await fn(dir);
+    return await fn(dir);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -114,33 +114,33 @@ describe("oxc-staged", () => {
     await Bun.write(join(dir, ".gitignore"), "node_modules\n");
   }
 
-  test("does nothing in a repo that is not on the standard", () =>
-    withDir(async (dir) => {
+  const codes = { unadopted: [] as number[], root: [] as number[], subdirectory: [] as number[] };
+
+  beforeAll(async () => {
+    codes.unadopted = await withDir(async (dir) => {
       git(dir, "init", "--quiet");
       await Bun.write(join(dir, "a.ts"), "const  x=1\n// prose\n");
       git(dir, "add", ".");
-      expect(oxcStaged([], dir)).toBe(0);
-    }));
+      return [oxcStaged([], dir)];
+    });
 
-  test("checks staged files with oxfmt and with oxlint, landmines included", () =>
-    withDir(async (dir) => {
+    codes.root = await withDir(async (dir) => {
       git(dir, "init", "--quiet");
       await project(dir);
       await Bun.write(join(dir, "a.ts"), "export const x = 1;\n");
       git(dir, "add", ".");
-      expect(oxcStaged([], dir)).toBe(0);
+      const clean = oxcStaged([], dir);
 
       await Bun.write(join(dir, "a.ts"), "export const  x=1\n");
       git(dir, "add", "a.ts");
-      expect(oxcStaged([], dir)).toBe(1);
+      const unformatted = oxcStaged([], dir);
 
       await Bun.write(join(dir, "a.ts"), "// prose\nexport const x = 1;\n");
       git(dir, "add", "a.ts");
-      expect(oxcStaged([], dir)).toBe(1);
-    }));
+      return [clean, unformatted, oxcStaged([], dir)];
+    });
 
-  test("checks a package in a subdirectory from that package", () =>
-    withDir(async (dir) => {
+    codes.subdirectory = await withDir(async (dir) => {
       git(dir, "init", "--quiet");
       await mkdir(join(dir, "plugin"));
       await project(join(dir, "plugin"));
@@ -150,9 +150,22 @@ describe("oxc-staged", () => {
         "export function f(): number {\n  return 1;\n}\n",
       );
       git(dir, "add", ".");
-      expect(oxcStaged([], dir)).toBe(1);
+      const returnType = oxcStaged([], dir);
       await Bun.write(join(dir, "plugin", "a.ts"), "export function f() {\n  return 1;\n}\n");
       git(dir, "add", ".");
-      expect(oxcStaged([], dir)).toBe(0);
-    }));
+      return [returnType, oxcStaged([], dir)];
+    });
+  }, 60_000);
+
+  test("does nothing in a repo that is not on the standard", () => {
+    expect(codes.unadopted).toEqual([0]);
+  });
+
+  test("checks staged files with oxfmt and with oxlint, landmines included", () => {
+    expect(codes.root).toEqual([0, 1, 1]);
+  });
+
+  test("checks a package in a subdirectory from that package", () => {
+    expect(codes.subdirectory).toEqual([1, 0]);
+  });
 });
