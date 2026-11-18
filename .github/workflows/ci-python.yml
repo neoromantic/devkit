@@ -40,8 +40,15 @@ on:
         description: Extra packages for the test run (space-separated, passed as uv run --with)
         type: string
         default: ""
+      persistent-venv:
+        description: On self-hosted runners, keep the virtualenv in the runner tool cache between runs. uv sync still makes it match the lockfile on every run
+        type: boolean
+        default: false
 
 permissions: {}
+
+env:
+  RUFF_VERSION: 0.17.5
 
 jobs:
   python:
@@ -78,7 +85,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
           working-directory: ${{ inputs.working-directory }}
           enable-cache: ${{ runner.environment != 'self-hosted' }}
-          cache-local-path: ${{ runner.tool_cache }}/uv
+          cache-local-path: ${{ runner.tool_cache }}/uv-cache
+
+      - name: Keep the virtualenv in the tool cache
+        if: inputs.persistent-venv && runner.environment == 'self-hosted'
+        env:
+          KEY: ${{ github.repository }}-${{ inputs.working-directory }}-${{ matrix.python-version || 'default' }}
+        run: |
+          key="$(printf '%s' "$KEY" | tr -c 'A-Za-z0-9._-' '_')"
+          echo "UV_PROJECT_ENVIRONMENT=$RUNNER_TOOL_CACHE/devkit-venv/$key" >> "$GITHUB_ENV"
 
       - name: Install
         run: |
@@ -96,7 +111,7 @@ jobs:
           if uv run --no-sync ruff --version >/dev/null 2>&1; then
             uv run --no-sync ruff check .
           else
-            uvx ruff check .
+            uvx "ruff@${RUFF_VERSION}" check .
           fi
 
       - name: Test

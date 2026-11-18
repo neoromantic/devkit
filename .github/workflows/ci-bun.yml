@@ -106,14 +106,19 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
-      # The landmines rules of the shared lint standard are oxlint JS plugins, which need
-      # Node 22.18 or later. A repo on the standard (.oxlintrc.devkit.jsonc) gets Node 24 when
-      # the runner has none or an older one; other repos skip this.
-      - name: Resolve Node for oxlint
+      # A repo that pins Node (.node-version or .nvmrc) gets exactly that Node. Otherwise the
+      # landmines rules of the shared lint standard, oxlint JS plugins, need Node 22.18 or later:
+      # a repo on the standard (.oxlintrc.devkit.jsonc) gets Node 24 when the runner has none or
+      # an older one; other repos skip this.
+      - name: Resolve Node
         id: node
         run: |
-          setup=false
-          if [ -f .oxlintrc.devkit.jsonc ]; then
+          setup=false file=""
+          if [ -f .node-version ]; then file=.node-version; elif [ -f .nvmrc ]; then file=.nvmrc; fi
+          if [ -n "$file" ]; then
+            setup=true
+            echo "Node from $file"
+          elif [ -f .oxlintrc.devkit.jsonc ]; then
             version="$(node -p process.versions.node 2>/dev/null || echo 0.0.0)"
             IFS=. read -r major minor _ <<< "$version"
             if [ "$major" -lt 22 ] || { [ "$major" -eq 22 ] && [ "$minor" -lt 18 ]; }; then
@@ -121,12 +126,13 @@ jobs:
             fi
             echo "Node $version on the runner; setup: $setup"
           fi
-          echo "setup=$setup" >> "$GITHUB_OUTPUT"
+          { echo "setup=$setup"; echo "file=$file"; } >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.node.outputs.setup == 'true'
         with:
-          node-version: 24
+          node-version: ${{ steps.node.outputs.file == '' && '24' || '' }}
+          node-version-file: ${{ steps.node.outputs.file != '' && format('{0}/{1}', inputs.working-directory, steps.node.outputs.file) || '' }}
           package-manager-cache: false
 
       - name: Check
