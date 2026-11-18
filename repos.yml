@@ -147,3 +147,18 @@ repos:
     settings:
       private_vulnerability_reporting: false
     required_checks: [ci]
+
+  bb-plugin-model-effort-badges:
+    profile: bun
+    description: See each thread’s model and reasoning effort in the BB sidebar. Hover for the full name.
+    required_checks: [ci]
+
+  bb-plugin-responsibilities:
+    profile: bun
+    description: Find failures, questions and unread results in BB. Filter threads, start child threads and optionally highlight managers.
+    required_checks: [ci]
+
+  bb-plugin-subthread-columns:
+    profile: bun
+    description: Answer waiting subthreads and inspect failures beside their parent. Optional Responsibilities adds unread-result columns.
+    required_checks: [ci]
