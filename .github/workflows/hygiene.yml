@@ -119,8 +119,11 @@ jobs:
           curl -fsSLo gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
           mkdir -p "$RUNNER_TEMP/bin" && tar -xzf gitleaks.tar.gz -C "$RUNNER_TEMP/bin" gitleaks && rm gitleaks.tar.gz
+          # gitleaks splits --log-opts on single spaces, so a stray space becomes an empty revision,
+          # git fails and gitleaks reports "0 commits scanned" as a pass. Rejoin the words with one space.
+          read -ra opts <<< "$RANGE $GITLEAKS_LOG_OPTS"
           args=(git --redact --no-banner --verbose --exit-code 1)
-          if [ -n "$RANGE$GITLEAKS_LOG_OPTS" ]; then args+=(--log-opts="$RANGE $GITLEAKS_LOG_OPTS"); fi
+          if [ "${#opts[@]}" -gt 0 ]; then args+=(--log-opts="${opts[*]}"); fi
           "$RUNNER_TEMP/bin/gitleaks" "${args[@]}" .
 
       - name: Check out devkit for the privacy scan
