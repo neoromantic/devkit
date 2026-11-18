@@ -311,9 +311,12 @@ export async function init(opts: InitOptions): Promise<InitResult> {
       if (write) await Bun.write(join(dir, 'knip.json'), KNIP_CONFIG)
     }
 
-    // Install whenever bun.lock lacks Knip, so a run after a failed install still fixes the lock.
+    // A transitive Knip entry does not lock the root project’s direct dependency.
     const lock = await readText(join(dir, 'bun.lock'))
-    if (lock === null || !lock.includes('"knip"')) {
+    const locked = lock === null ? undefined : Bun.JSONC.parse(lock) as { workspaces?: Record<string, PackageJson> }
+    const root = locked?.workspaces?.['']
+    const expected = plan.pkg.devDependencies?.knip ?? plan.pkg.dependencies?.knip
+    if ((root?.devDependencies?.knip ?? root?.dependencies?.knip) !== expected) {
       const action = lock === null ? 'create' : 'update'
       if (!write) changes.push({ path: 'bun.lock', action, note: 'bun install' })
       else if (opts.install === false) notes.push('Run `bun install` to update bun.lock.')

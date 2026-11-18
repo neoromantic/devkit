@@ -116,7 +116,8 @@ jobs:
 
 `ci-bun.yml` inputs: `os` (JSON list, default `["ubuntu-latest"]`), `working-directory`,
 `bun-version` (default: `.bun-version`, then `packageManager` in `package.json`), `canary`, `e2e`.
-Scripts that don't exist are skipped.
+Use `pack: true` to install and run the packed CLI. `pack-args` selects its arguments.
+See [the pack smoke test](docs/standards/pack-smoke.md). Scripts that don't exist are skipped.
 
 Set the repository variable `CI_SELF_HOSTED` to `true` to run `main` Linux builds on
 an isolated runner with the `oss-linux` label. PRs and other branches use GitHub-hosted runners, as do repositories

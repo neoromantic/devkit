@@ -171,6 +171,17 @@ describe('init: Python', () => {
       expect((await syncCheckout(syncRepo('python'), dir, { adopt: false })).every((c) => c.action === 'ok')).toBe(true)
     }))
 
+  test('locks Knip in the root manifest even when a workspace already uses it', () =>
+    withDir(async (dir) => {
+      await writeJson(join(dir, 'package.json'), { name: 'demo' })
+      await writeJson(join(dir, 'bun.lock'), {
+        workspaces: { '': {}, 'tools/demo': { devDependencies: { knip: KNIP } } },
+        packages: { knip: [] },
+      })
+      const dry = await init({ dir, dryRun: true })
+      expect(actions(dry)).toContain('update bun.lock')
+    }))
+
   test('a Poetry project keeps its own CI', () =>
     withDir(async (dir) => {
       await Bun.write(join(dir, 'pyproject.toml'), '[project]\nname = "demo"\n[project.urls]\nSource = "https://github.com/someone/demo"\n')
@@ -191,7 +202,7 @@ describe('init: existing project', () => {
         devDependencies: { typescript: '5.0.0', knip: '^5.0.0' },
       }
       await Bun.write(join(dir, 'package.json'), `${JSON.stringify(pkg, null, '\t')}\n`)
-      await Bun.write(join(dir, 'bun.lock'), '{ "packages": { "knip": [] } }\n')
+      await writeJson(join(dir, 'bun.lock'), { workspaces: { '': { devDependencies: { knip: '^5.0.0' } } } })
       await Bun.write(join(dir, 'knip.config.ts'), 'export default {}\n')
       await mkdir(join(dir, '.github/workflows'), { recursive: true })
       await Bun.write(join(dir, '.github/workflows/test.yml'), 'name: test\n')
