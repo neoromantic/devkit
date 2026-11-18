@@ -75,6 +75,9 @@ repos:
 
   telesec:
     profile: python
+    # Telesec writes its own security policy and contributing guide, and its CI adds a Python
+    # version matrix and tag builds; sync leaves those three files alone.
+    exclude: [SECURITY.md, CONTRIBUTING.md, .github/workflows/ci.yml]
     description: Telesec — Telegram Business secretary for Hermes
     homepage: https://telesec.sergeybaus.com
     topics:
