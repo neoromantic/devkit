@@ -23,5 +23,25 @@
     "landmines-structure/package-exports": "error",
     "landmines-structure/test-file-names": "error",
     "landmines-types/no-explicit-return-types": "error",
+    "no-restricted-properties": [
+      "error",
+      {
+        "object": "mock",
+        "property": "module",
+        "message": "mock.module replaces a module for the whole test process, and mock.restore() does not undo it. Use the real module, a local substitute or MSW (docs/standards/testing.md).",
+      },
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "bun:test",
+            "importNames": ["setDefaultTimeout"],
+            "message": "Do not raise the default test timeout. Split slow sweeps with test.each, or run slow shared setup once in beforeAll.",
+          },
+        ],
+      },
+    ],
   },
 }
