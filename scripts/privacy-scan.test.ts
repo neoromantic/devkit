@@ -16,7 +16,6 @@ import {
   scanText,
 } from "./privacy-scan";
 
-// Built at runtime so this file doesn't trip the scanner itself.
 const PHONE = ["+44", "7700", "9124", "86"].join(" ");
 const HOME = ["", "Users", "alice", "Developer", "x"].join("/");
 

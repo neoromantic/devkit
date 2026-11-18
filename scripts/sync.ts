@@ -1,15 +1,4 @@
 #!/usr/bin/env bun
-/**
- * sync: render devkit's managed files and AGENTS block into each repo in repos.yml.
- *
- *   bun scripts/sync.ts [--dry-run]            show the diff per repo (default)
- *   bun scripts/sync.ts --write                open one PR per repo with the changes
- *   options: --only a,b   --adopt (overwrite existing files that are not managed yet)
- *            --keep (leave the temp clones on disk)
- *
- * Frozen repos (see repos.yml) are skipped. Existing files without the
- * "managed by devkit" mark are left alone unless --adopt is given.
- */
 import { lstat, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -85,7 +74,6 @@ export async function syncCheckout(
   const write = opts.dryRun ? async () => {} : writeFile;
   const changes: Change[] = [];
   const vars = templateVars(repo);
-  // A Bun CLI's CI smoke-tests the packed package. Read from the checkout, not from repos.yml.
   const pack = await declaresBin(dir);
   for (const [target, template] of Object.entries(repo.files)) {
     if (await isSymlink(join(dir, target))) {

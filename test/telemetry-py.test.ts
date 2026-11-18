@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 
-// Runs the unittest suite of templates/telemetry/telemetry.py (Python 3.11+, stdlib only).
 const root = join(import.meta.dir, "..");
 
 function findPython(): string | null {
@@ -20,7 +19,6 @@ if (!python) console.warn("telemetry.py tests skipped: no python3 >= 3.11 on PAT
 test.skipIf(!python)(
   "telemetry.py passes its unittest suite",
   () => {
-    // A clean environment: the suite sets its own HOME, state dir and endpoint.
     const run = Bun.spawnSync(
       [python ?? "python3", "-B", "-m", "unittest", "discover", "-s", "test/telemetry/python"],
       { cwd: root, env: { PATH: process.env.PATH ?? "" }, stdout: "pipe", stderr: "pipe" },

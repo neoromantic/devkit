@@ -146,7 +146,6 @@ describe("repo-settings", () => {
 describe("main ruleset", () => {
   const want = desiredRuleset(["ci"]);
 
-  // The shape GET /repos/{owner}/{repo}/rulesets/{id} returns after --apply created it.
   const applied = {
     id: 1,
     name: RULESET_NAME,

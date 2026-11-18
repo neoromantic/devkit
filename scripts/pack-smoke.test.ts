@@ -9,7 +9,6 @@ const SCRIPT = join(ROOT, "scripts", "pack-smoke.ts");
 const dir = mkdtempSync(join(tmpdir(), "devkit-pack-test-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-// The fixture CLI fails if job state leaks in, and echoes its argv as JSON.
 const CLI = `#!/usr/bin/env bun
 const leaked = Object.entries(process.env).filter(([, v]) => v === 'fake-secret-value').map(([k]) => k)
 if (leaked.length) { console.error('leaked', leaked); process.exit(9) }
@@ -39,7 +38,6 @@ function fixture(
 }
 
 function smoke(pkg: string, env: Record<string, string> = {}) {
-  // A PATH without Bun: the helper must supply its own Bun for the `env bun` shebang.
   const r = Bun.spawnSync([process.execPath, SCRIPT, pkg], {
     env: {
       PATH: "/usr/bin:/bin",

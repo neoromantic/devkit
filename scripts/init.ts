@@ -1,19 +1,4 @@
 #!/usr/bin/env bun
-/**
- * init: onboard the repo in the current directory (or --dir) to devkit, offline.
- *
- *   devkit init [--dir path] [--dry-run] [--json] [--repo owner/name] [--profile bun|python]
- *               [--adopt] [--no-install]
- *
- * Writes by default; --dry-run only reports. Detects a Bun or Python project from its own files
- * and git remote: no repos.yml lookup and no GitHub API calls. Writes the same managed files and
- * AGENTS block as sync, so a later sync keeps them. Bun projects also get Knip: a pinned
- * devDependency, a knip.json baseline, a `check:knip` script wired into `check`, and bun.lock
- * from `bun install`. They also get the shared lint and format standard: oxlint, oxfmt and
- * landmines pinned, `format`, `format:check` and `lint` scripts run by `check`, and a `.oxlintrc.json`
- * that extends the managed `.oxlintrc.devkit.jsonc`. Existing CI, hooks, Knip settings, scripts and
- * unmanaged files are kept. JS projects on npm, pnpm or yarn are refused before anything is written.
- */
 import { lstat, readdir } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -49,7 +34,6 @@ export const INIT_FILES: Record<Profile, Record<string, string>> = {
   },
 };
 
-/** Paths that already do a managed file's job. When one exists, init leaves that file out. */
 const EQUIVALENTS: Record<string, string[]> = {
   "SECURITY.md": [".github/SECURITY.md", "docs/SECURITY.md"],
   "CONTRIBUTING.md": [".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"],
@@ -100,11 +84,9 @@ export const OXLINT_CONFIG =
 
 const OXLINT_CONFIG_FILE = /^(\.oxlintrc\.jsonc?|oxlint\.config\.(ts|mts|cts|js|mjs|cjs))$/;
 
-/** Linters and formatters that oxlint and oxfmt replace. init reports them and removes nothing. */
 const OTHER_TOOLS =
   /^(biome\.jsonc?|\.eslintrc(\.\w+)?|eslint\.config\.\w+|\.prettierrc(\.\w+)?|prettier\.config\.\w+|dprint\.jsonc?|\.dprint\.jsonc?)$/;
 
-/** A workflow that already is CI: named like one, calls the shared jobs, or runs checks or tests. */
 const CI_NAME = /^(ci|tests?|checks?|build|lint)\.ya?ml$/i;
 const CI_CONTENT =
   /ci-(bun|python)\.yml|\b(bun (run )?(check|test|lint|typecheck)|pytest|ruff check)\b/;
@@ -324,7 +306,6 @@ export async function init(opts: InitOptions): Promise<InitResult> {
   const notes: string[] = [];
   const changes: Change[] = [];
 
-  // Repo identity, from local sources only.
   const pkgRepo =
     typeof pkg.repository === "string" ? pkg.repository : (pkg.repository as { url?: string })?.url;
   const pyUrls = pyText
@@ -341,8 +322,6 @@ export async function init(opts: InitOptions): Promise<InitResult> {
     throw new Error(`--repo must be owner/name, got "${opts.repo}"`);
 
   const files = { ...INIT_FILES[profile] };
-  // Fleet sync has the repo's desired Renovate preset. Local init knows only the
-  // existing selection and must preserve it, along with any custom options.
   const renovate = await readText(join(dir, "renovate.json"));
   if (renovate && isManaged(renovate) && !renovate.includes("{{renovate_preset}}")) {
     delete files["renovate.json"];
@@ -403,8 +382,6 @@ export async function init(opts: InitOptions): Promise<InitResult> {
     files,
     settings: {},
   };
-  // `bun init` and agents write rules into CLAUDE.md. With no AGENTS.md yet, they move to its
-  // Project section and CLAUDE.md becomes "@AGENTS.md", as the shared rules require.
   const claude = names.has("AGENTS.md") ? null : await readText(join(dir, "CLAUDE.md"));
   const moveClaude =
     claude !== null &&
@@ -499,7 +476,6 @@ export async function init(opts: InitOptions): Promise<InitResult> {
         `Found ${others.join(", ")}: oxlint and oxfmt replace it. Remove it and its dependencies.`,
       );
 
-    // A transitive entry does not lock the root project’s direct dependency.
     const lock = await readText(join(dir, "bun.lock"));
     const locked =
       lock === null

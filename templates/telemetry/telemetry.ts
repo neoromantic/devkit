@@ -1,15 +1,11 @@
-// managed by devkit v1 — change it in neoromantic/devkit templates/telemetry/, not here. Spec: https://github.com/neoromantic/devkit/blob/main/docs/standards/telemetry.md
-//
-// Usage telemetry client for Bun and Node 20+, no dependencies. Every error is
-// swallowed. Events go out in the background, one attempt with a 3 s timeout.
-// When telemetry is off it writes nothing to disk and opens no connection.
+// WARNING: managed by devkit v1: edit in https://github.com/neoromantic/devkit/blob/main/templates/telemetry/telemetry.ts, spec https://github.com/neoromantic/devkit/blob/main/docs/standards/telemetry.md
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { basename, dirname, join } from "node:path";
 
 const ENDPOINT = "https://usage.sergeybaus.com/i/v0/e/";
-const API_KEY = "phc_np7sxHvzFH1HDTlQdMaqRDrpOVZ0xytnSDxyCMBwNO9"; // PostHog's public, write-only key. gitleaks:allow
+const API_KEY = "phc_np7sxHvzFH1HDTlQdMaqRDrpOVZ0xytnSDxyCMBwNO9"; // WARNING: PostHog's public, write-only key, not a secret. gitleaks:allow
 const LIB = "devkit-telemetry";
 const LIB_VERSION = "1";
 const NOTICE_VERSION = 1;
@@ -137,7 +133,6 @@ interface State {
   daily: Props;
 }
 
-// Values are trimmed and compared ignoring case; empty counts as unset.
 const norm = (value: string | undefined) => (value ?? "").trim().toLowerCase();
 const isSet = (value: string | undefined): boolean => norm(value) !== "";
 const cut = (text: string, max: number) => [...text].slice(0, max).join("");
@@ -151,7 +146,6 @@ function safe<T>(fn: () => T, fallback: T): T {
   }
 }
 
-/** Rules 1-4 of "Turning it off". Null: none matched, telemetry.json decides. */
 function envDecision(endpoint: string, env: Env, prefix: string, version: string): Decision | null {
   const off = (reason: Reason): Decision => ({ enabled: false, reason });
   if (!endpoint) return off("no-endpoint");
@@ -167,7 +161,6 @@ function envDecision(endpoint: string, env: Env, prefix: string, version: string
   }
   const testRun = [env.VITEST, env.JEST_WORKER_ID].some(isSet);
   if (norm(env.NODE_ENV) === "test" || testRun) return off("test");
-  // dev, devel, (devel), 1.2.0-dev.1, 0.0.0, v0.0.0
   const v = norm(version).replace(/^v/, "");
   if (v === "" || v === "0.0.0" || v.includes("dev")) return off("dev-version");
   return null;
@@ -183,11 +176,6 @@ function detectAgent(env: Env): string | undefined {
   return undefined;
 }
 
-/**
- * In one pass, ignoring case, wherever they are not part of a longer word:
- * the home directory -> `~`, the user name -> `<user>`. Then trimmed and cut
- * to 300 characters.
- */
 function scrub(text: string, env: Env): string {
   const home = (env.HOME || env.USERPROFILE || safe(os.homedir, "")).replace(/[\\/]+$/, "");
   const swaps = new Map<string, string>();
@@ -196,7 +184,6 @@ function scrub(text: string, env: Env): string {
   }
   for (const name of [env.USER, env.LOGNAME, env.USERNAME, basename(home)]) {
     const n = norm(name);
-    // A one-letter name would mangle every word.
     if (n.length > 1 && !swaps.has(n)) swaps.set(n, "<user>");
   }
   let out = text;
@@ -214,7 +201,6 @@ function errorProps(err: unknown, env: Env): Props {
   if (typeof err !== "object" || err === null) return { error_type: "Error" };
   const e = err as { code?: unknown; name?: unknown; message?: unknown };
   const code = ["string", "number"].includes(typeof e.code) ? `${e.code}` : "";
-  // A subclass that doesn't set `name` still reports its class name.
   const name = typeof e.name === "string" && e.name !== "Error" ? e.name : err.constructor?.name;
   const props: Props = { error_type: cut(code || name || "Error", 100) };
   const message = typeof e.message === "string" ? scrub(e.message, env) : "";
@@ -229,8 +215,6 @@ function systemProps(): Props {
   const names: Props = { darwin: "macOS", win32: "Windows", linux: "Linux" };
   const read = (file: string, re: RegExp) =>
     re.exec(safe(() => fs.readFileSync(file, "utf8"), ""))?.[1]?.trim();
-  // os.release() is the kernel version: Darwin's on macOS, so read the
-  // product version there, and the distribution's version on Linux.
   const plist = "/System/Library/CoreServices/SystemVersion.plist";
   const version =
     (p === "darwin" && read(plist, /<key>ProductVersion<\/key>\s*<string>([^<]+)</)) ||
@@ -261,7 +245,6 @@ function readState(storage: TelemetryStorage): State {
   };
 }
 
-/** One line of JSON, written to a temp file and renamed into place. */
 function writeFile(file: string, json: string): boolean {
   if (!file) return false;
   const tmp = `${file}.${process.pid}.tmp`;
@@ -297,7 +280,6 @@ function envelope(event: string, distinctId: string, properties: object) {
   };
 }
 
-/** One POST, 3 s for the whole request, the response is ignored. */
 async function deliver(endpoint: string, body: object, ua: string, debug = false): Promise<void> {
   try {
     const json = JSON.stringify(body);
@@ -312,12 +294,9 @@ async function deliver(endpoint: string, body: object, ua: string, debug = false
       signal: AbortSignal.timeout(3000),
     });
     await res.body?.cancel();
-  } catch {
-    // Offline, refused or timed out: telemetry never fails the product.
-  }
+  } catch {}
 }
 
-/** What createTelemetry and capture share: the decision, the mode, the agent. */
 function resolve(o: CaptureOptions) {
   const env = o.env ?? process.env;
   const endpoint = o.endpoint ?? ENDPOINT;
@@ -333,10 +312,8 @@ function resolve(o: CaptureOptions) {
     endpoint,
     mode,
     fixed: envDecision(endpoint, env, prefix, `${o.version ?? ""}`),
-    // The notice goes to stderr, so only a terminal there counts.
     noticeFits: () => !!agent || tty(process.stderr),
     ua: `${LIB}/${LIB_VERSION} (${o.product}/${o.version})`,
-    /** The properties of every event; empty optional ones are left out. */
     common: (): Props => {
       const props: Props = {
         product: o.product,
@@ -370,14 +347,11 @@ export async function capture(
     const props = { ...r.common(), ...properties };
     const body = envelope(event, distinctId || randomUUID(), props);
     await deliver(r.endpoint, body, r.ua, r.fixed?.debug);
-  } catch {
-    // never throws
-  }
+  } catch {}
 }
 
 export function createTelemetry(options: TelemetryOptions): Telemetry {
   const r = resolve(options);
-  // An empty stateDir must not mean the current directory.
   const stateDir = options.stateDir;
   const stateFile = stateDir ? join(stateDir, "telemetry.json") : "";
   const storage = options.storage ?? {
@@ -389,7 +363,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
   const inflight = new Set<Promise<void>>();
   const off = options.offCommand || `${options.product} telemetry off`;
   const notice = `${options.product} shares usage stats with its author: how often it runs, which features are used, errors, version and OS, tied to a random install ID. It never sends your files, arguments or account names. Nothing has been sent yet. Turn it off with \`${off}\` or \`DO_NOT_TRACK=1\`. Details: ${NOTICE_URL}`;
-  let quiet = false; // this process showed the notice, so it sends nothing
+  let quiet = false;
 
   const decide = (state: State): Decision =>
     r.fixed ?? {
@@ -398,7 +372,6 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     };
   const due = (state: State) => decide(state).enabled && state.notice < NOTICE_VERSION;
 
-  /** Records the notice (and an id); with `silence` this run sends nothing. */
   const seen = (state: State, silence: boolean): boolean => {
     const first = state.notice < NOTICE_VERSION;
     state.notice = NOTICE_VERSION;
@@ -410,7 +383,6 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
 
   const track = (event: string, extra: Props, key: string): void => {
     if (quiet || r.fixed?.enabled === false) return;
-    // Read every time: `telemetry off` in another process stops a daemon.
     const state = readState(storage);
     const decision = decide(state);
     if (!decision.enabled || state.notice < NOTICE_VERSION) return;
@@ -422,11 +394,9 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     const changed = !state.id || !state.installed || throttled;
     const id = state.id ?? randomUUID();
     if (throttled) {
-      // Only today's keys matter, so older ones are dropped.
       const kept = Object.entries(state.daily).filter(([, d]) => d === day);
       state.daily = { ...Object.fromEntries(kept), [key]: day };
     }
-    // A state directory that cannot be written means nothing is sent.
     const next = { ...state, id, installed: true };
     if (changed && !writeState(storage, next)) return;
     const common = r.common();
@@ -443,7 +413,6 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     showNotice: () =>
       safe(() => {
         const state = readState(storage);
-        // Write first: a notice that can't be recorded would print every run.
         if (!due(state) || !r.noticeFits() || !seen(state, true)) return false;
         process.stderr.write(`${notice}\n`);
         return true;
@@ -487,9 +456,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     setEnabled: (on) =>
       safe(() => {
         const state = readState(storage);
-        // An explicit opt-in is not a notice run: this process may send.
         if (on) return seen({ ...state, enabled: true }, false);
-        // Off forgets the id and the counters.
         const cleared: State = {
           id: null,
           enabled: false,

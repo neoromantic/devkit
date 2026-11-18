@@ -1,16 +1,4 @@
 #!/usr/bin/env bun
-/**
- * repo-settings: compare GitHub repo settings with repos.yml.
- *
- *   bun scripts/repo-settings.ts                 print the diff (default)
- *   bun scripts/repo-settings.ts --apply         apply it
- *   options: --only a,b   --include-frozen (also apply to frozen repos)
- *
- * Managed: description, homepage, topics, has_wiki, has_projects,
- * delete_branch_on_merge, secret scanning and push protection, private
- * vulnerability reporting (SECURITY.md points reporters there), and the
- * `main (devkit)` branch ruleset for repos with `required_checks`.
- */
 import { parseArgs } from "node:util";
 import {
   gh,
@@ -150,7 +138,6 @@ export function rulesetFromApi(api: GitHubRuleset): Ruleset {
   };
 }
 
-/** The parts of a ruleset devkit compares, as plain values. */
 function rulesetView(r: Ruleset): Record<string, string | string[]> {
   const checks = r.rules.find((x) => x.type === "required_status_checks")?.parameters as
     | StatusChecks
@@ -255,7 +242,6 @@ export function formatDiff(d: SettingDiff | RulesetDiff): string {
   return `${d.field}: ${show(d.current)} -> ${show(d.desired)}`;
 }
 
-/** The repo's own ruleset named RULESET_NAME, or null. Rulesets inherited from an org are ignored. */
 function fetchRuleset(fullName: string): { id: number; body: Ruleset } | null {
   const list = JSON.parse(
     gh(["api", `repos/${fullName}/rulesets?includes_parents=false&per_page=100`]),

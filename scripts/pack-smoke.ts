@@ -1,16 +1,5 @@
 #!/usr/bin/env bun
-/**
- * pack-smoke [dir]: pack a package with `bun pm pack`, install the tarball into a fresh
- * project outside the checkout with a clean HOME and environment, then run every CLI from the
- * packed package.json `bin`. Each invocation must exit 0.
- *
- * Self-contained (node builtins and Bun only): ci-bun.yml copies this one file out of the
- * devkit revision it was called from and runs it with the consumer's Bun.
- *
- * Environment:
- *   DEVKIT_PACK_DIR    package directory when no argument is given. Default: current directory.
- *   DEVKIT_PACK_ARGS   JSON argv list or list of lists, run for every bin. Default [["--help"]].
- */
+// WARNING: import only Node builtins and Bun here: ci-bun.yml copies this one file out of devkit and runs it alone.
 import {
   existsSync,
   mkdirSync,
@@ -185,8 +174,6 @@ export async function main(argv: string[]): Promise<number> {
     const tarball = join(out!, tarballs[0]!);
     console.log(`packed ${tarball}`);
 
-    // PATH: the bins, the Bun running this script (for `#!/usr/bin/env bun`), then the job's
-    // PATH without anything from the checkout (such as its node_modules/.bin).
     const binDir = join(project!, "node_modules", ".bin");
     const systemPath = (getEnv("PATH") ?? "")
       .split(delimiter)

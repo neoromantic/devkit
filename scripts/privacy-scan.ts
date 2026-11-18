@@ -1,18 +1,4 @@
 #!/usr/bin/env bun
-/**
- * privacy-scan: block private text from reaching a public repo.
- *
- * Checks lines against two rule sets:
- *  - generic patterns (phone numbers, home directory paths), always on;
- *  - private markers from ~/.config/devkit/private-markers (one per line,
- *    `/regex/flags` or a plain case-insensitive string). That file never
- *    lives in a repo.
- *
- * Prints only `path:line` for each hit, never the matched text, so CI logs
- * and terminal scrollback don't leak the very thing it found.
- *
- * Exit codes: 0 clean, 1 hits, 2 usage or setup error.
- */
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 
@@ -40,9 +26,7 @@ export function phoneDigits(candidate: string): string | null {
   if (digits.length < 10 || digits.length > 15) return null;
   if (/^(\d)\1+$/.test(digits)) return null;
   if (digits.includes("1234567") || digits.includes("9876543")) return null;
-  // North American fictional range: +1 555 01xx and friends.
   if (/^1555/.test(digits)) return null;
-  // Mostly zeros (+44 20 0000 0000 and similar) is a placeholder.
   if ((digits.match(/0/g)?.length ?? 0) >= digits.length - 3) return null;
   return digits;
 }
@@ -288,9 +272,7 @@ export async function loadIgnoreRules(): Promise<IgnoreRule[]> {
   let root = process.cwd();
   try {
     root = git(["rev-parse", "--show-toplevel"]).trim() || root;
-  } catch {
-    // not a git checkout: scanning given paths
-  }
+  } catch {}
   const file = Bun.file(join(root, IGNORE_FILE));
   return (await file.exists()) ? parseIgnore(await file.text()) : [];
 }

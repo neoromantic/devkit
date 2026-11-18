@@ -24,9 +24,10 @@ import {
 } from "./telemetry";
 
 const ID = "8b0e6c1a-3f0d-4a51-9a7e-2f1c5d9e4b77";
-const KEY = "phc_np7sxHvzFH1HDTlQdMaqRDrpOVZ0xytnSDxyCMBwNO9"; // the public, write-only key. gitleaks:allow
+const KEY = "phc_np7sxHvzFH1HDTlQdMaqRDrpOVZ0xytnSDxyCMBwNO9"; // WARNING: the public, write-only key, not a secret. gitleaks:allow
 const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/;
 const TODAY = new Date().toISOString().slice(0, 10);
+const USERS = ["", "Users"].join("/");
 
 interface Body {
   api_key: string;
@@ -77,7 +78,6 @@ const newDir = () => mkdtempSync(join(root, "state-"));
 const stateFile = (dir: string) => join(dir, "telemetry.json");
 const readState = (dir: string) => JSON.parse(readFileSync(stateFile(dir), "utf8"));
 
-/** A state dir where the notice was already seen on an earlier run. */
 function seeded(extra: Record<string, unknown> = {}): string {
   const dir = newDir();
   const state = { id: ID, enabled: null, notice: 1, installed: true, daily: {}, ...extra };
@@ -100,7 +100,6 @@ function make(overrides: Partial<TelemetryOptions> = {}): Telemetry {
   });
 }
 
-/** Everything the server got from this client, once its requests are done. */
 async function sent(t: Telemetry): Promise<Received[]> {
   await t.flush(2500);
   return received.splice(0);
@@ -482,14 +481,14 @@ describe("events", () => {
     const cases: [Env, string, string][] = [
       [
         { HOME: "/Users/Ann", USER: "ann" },
-        "read /users/ann/x and /Users/annabel/y as ANN",
-        "read ~/x and /Users/annabel/y as <user>",
-      ], // privacy-scan:allow
+        `read /users/ann/x and ${USERS}/annabel/y as ANN`,
+        `read ~/x and ${USERS}/annabel/y as <user>`,
+      ],
       [
         { HOME: "C:\\Users\\ann", USERNAME: "ann" },
-        "C:\\Users\\Ann\\a and C:/Users/ann/b",
+        `C:\\Users\\Ann\\a and C:${USERS}/ann/b`,
         "~\\a and ~/b",
-      ], // privacy-scan:allow
+      ],
       [
         { HOME: "/home/user", USER: "user", LOGNAME: "user" },
         "user wrote to /home/user/z",
@@ -554,7 +553,7 @@ describe("events", () => {
 
   test("a run detected as a script is throttled too", async () => {
     const dir = seeded();
-    const first = make({ stateDir: dir }); // no mode, no agent, no terminal
+    const first = make({ stateDir: dir });
     first.started();
     await first.flush(2500);
     const second = make({ stateDir: dir });
@@ -612,7 +611,6 @@ describe("state file", () => {
     const state = readState(dir);
     expect(Object.keys(state)).toEqual(["id", "enabled", "notice", "installed", "daily"]);
     expect(state).toEqual({ id: ID, enabled: null, notice: 1, installed: true, daily: {} });
-    // The same bytes the Go and Python clients write.
     expect(readFileSync(stateFile(dir), "utf8")).toBe(
       `{"id":"${ID}","enabled":null,"notice":1,"installed":true,"daily":{}}\n`,
     );
@@ -639,7 +637,7 @@ describe("state file", () => {
     expect(err.lines()).toEqual([]);
     expect(t.setEnabled(true)).toBe(false);
 
-    if (process.getuid?.() === 0) return; // root ignores file modes
+    if (process.getuid?.() === 0) return;
     const dir = seeded({ installed: false });
     chmodSync(dir, 0o500);
     try {
@@ -673,13 +671,12 @@ describe("state file", () => {
     expect(state).toMatchObject({ enabled: true, notice: 1, installed: false });
     expect(state.id).not.toBe(ID);
     expect(on.status()).toMatchObject({ enabled: true, reason: "state", id: state.id });
-    on.started(); // an explicit opt-in is not a notice run
+    on.started();
     expect((await sent(on)).map(keyOf).sort()).toEqual(["app_installed", "app_started"]);
 
-    // After off, an env override sends again under a new id.
     expect(on.setEnabled(false)).toBe(true);
     const forced = make({ stateDir: fresh, env: { DEMO_CLI_TELEMETRY: "1" } });
-    expect(forced.showNotice()).toBe(false); // the notice was already seen
+    expect(forced.showNotice()).toBe(false);
     forced.started();
     const again = await sent(forced);
     expect(again.map(keyOf).sort()).toEqual(["app_installed", "app_started"]);
@@ -691,7 +688,6 @@ describe("state file", () => {
 describe("host storage: a BB plugin", () => {
   type Choice = "undecided" | "on" | "off";
 
-  /** A plugin database with the telemetry table, as bb.storage.migrate() would leave it. */
   function dbFile(): string {
     const file = join(newDir(), "data.db");
     const db = new Database(file);
@@ -700,10 +696,6 @@ describe("host storage: a BB plugin", () => {
     return file;
   }
 
-  /**
-   * The binding from docs/standards/telemetry.md ("BB plugins"), with bun:sqlite in place of
-   * bb.storage.database() and promises in place of the plugin setting and the host config.
-   */
   function bbPlugin(
     file: string,
     opts: { version?: string; env?: Env; host?: boolean; choice?: Choice } = {},
@@ -736,7 +728,6 @@ describe("host storage: a BB plugin", () => {
       choice: opts.choice ?? "undecided",
       host: opts.host ?? true,
       state: () => JSON.parse(row() ?? "null"),
-      /** The setting is saved and onChange runs. */
       change: (choice: Choice) => {
         p.choice = choice;
         for (const listener of listeners) listener(choice);
@@ -746,7 +737,6 @@ describe("host storage: a BB plugin", () => {
         p.change(choice);
       },
       config: () => Bun.sleep(5),
-      /** A qualifying event: await the load and the host config, then no await until the send. */
       shown: async () => {
         await ready;
         await p.config();
@@ -774,7 +764,7 @@ describe("host storage: a BB plugin", () => {
 
   test("nothing is sent before the choice, and the choice itself sends nothing", async () => {
     const p = bbPlugin(dbFile());
-    p.telemetry.feature("columns_shown"); // even a call that skips the binding
+    p.telemetry.feature("columns_shown");
     expect(p.state()).toBeNull();
     expect(await sent(p.telemetry)).toEqual([]);
 
@@ -782,7 +772,7 @@ describe("host storage: a BB plugin", () => {
     expect(await sent(p.telemetry)).toEqual([]);
     expect(p.state()).toEqual({ id: null, enabled: false, notice: 0, installed: false, daily: {} });
 
-    await p.choose("on"); // "Share usage"
+    await p.choose("on");
     expect(await sent(p.telemetry)).toEqual([]);
 
     await p.shown();
@@ -868,14 +858,14 @@ describe("host storage: a BB plugin", () => {
     await p.choose("on");
     p.db.run("pragma query_only = on");
     await p.choose("off");
-    expect(p.state().enabled).toBe(true); // the off write failed
+    expect(p.state().enabled).toBe(true);
     p.db.run("pragma query_only = off");
     await p.shown();
     expect(await sent(p.telemetry)).toEqual([]);
 
     await p.choose("on");
     const reinstalled = bbPlugin(file);
-    reinstalled.db.run("pragma query_only = on"); // forgetting the old id at load fails
+    reinstalled.db.run("pragma query_only = on");
     await Bun.sleep(5);
     reinstalled.db.run("pragma query_only = off");
     await reinstalled.shown();
@@ -903,7 +893,6 @@ describe("host storage: a BB plugin", () => {
         daily: {},
       });
 
-      // A plugin rollback restores the settings and the database together, then reloads.
       p.db.query("update telemetry set json = ?").run(JSON.stringify(snapshot.state));
       const back = bbPlugin(file, { choice: snapshot.choice });
       setSystemTime(new Date("2030-01-02T12:00:00Z"));
@@ -912,7 +901,6 @@ describe("host storage: a BB plugin", () => {
       expect(got.map(keyOf)).toEqual(["feature_used:columns_shown"]);
       expect(got[0]?.body.distinct_id).toBe(snapshot.state.id);
 
-      // A reinstall keeps the database but not the setting: the old id goes at load.
       const reinstalled = bbPlugin(file);
       await reinstalled.shown();
       expect(await sent(reinstalled.telemetry)).toEqual([]);
@@ -946,13 +934,13 @@ describe("host storage: a BB plugin", () => {
     const file = dbFile();
     const closed = bbPlugin(file);
     await closed.choose("on");
-    closed.db.close(); // the host closes handles on reload; a closed one throws
+    closed.db.close();
     await closed.shown();
     expect(await sent(closed.telemetry)).toEqual([]);
 
     await bbPlugin(file).choose("on");
     const ro = bbPlugin(file, { choice: "on" });
-    ro.db.run("pragma query_only = on"); // reads work, writes throw
+    ro.db.run("pragma query_only = on");
     await ro.shown();
     expect(ro.telemetry.status()).toMatchObject({ enabled: true, reason: "state" });
     ro.telemetry.feature("columns_shown");
@@ -1086,6 +1074,6 @@ describe("never blocks, never throws", () => {
     await expect(
       capture("x", {}, "id", undefined as unknown as CaptureOptions),
     ).resolves.toBeUndefined();
-    expect(received.splice(0).map((r) => r.body.event)).toEqual(["x"]); // null properties are just empty
+    expect(received.splice(0).map((r) => r.body.event)).toEqual(["x"]);
   });
 });

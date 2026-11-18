@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-/** Read-only technical status for the current default-branch SHA. */
 import { parseArgs } from "node:util";
 import { gh, loadReposFile, parseOnly, resolveRepos, selectRepos } from "./lib/repos";
 

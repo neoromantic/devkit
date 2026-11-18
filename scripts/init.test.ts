@@ -44,7 +44,6 @@ async function gitRepo(dir: string, remote = "https://github.com/someone/demo.gi
   git(dir, "remote", "add", "origin", remote);
 }
 
-/** Stands in for the bun.lock that `bun install` writes, so repeat runs stay offline. */
 async function fakeLock(dir: string) {
   await Bun.write(
     join(dir, "bun.lock"),
@@ -127,7 +126,6 @@ describe("init: fresh Bun project", () => {
       ]);
       expect(actions(dry)).toEqual([...actions(run), "create bun.lock"]);
       expect(run.notes.join("\n")).toContain("Run `bun install`");
-      // What bun install writes, enough for the offline repeat below.
       await fakeLock(dir);
       const pkg = await Bun.file(join(dir, "package.json")).json();
       expect(pkg.devDependencies).toEqual(TOOLS);
