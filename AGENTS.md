@@ -57,7 +57,7 @@ devkit holds the shared CI workflows, hooks, templates and agent rules for the r
 
 ### Commands
 
-- `bun run check` runs `tsc --noEmit`; `bun run test` runs `bun test`, offline.
+- `bun run check` runs `tsc --noEmit` and Knip; `bun run test` runs `bun test`, offline.
 - `actionlint` and `uvx zizmor --offline .` after any workflow change.
 - `bun scripts/sync.ts` (dry run) before any `--write`; `bun scripts/repo-settings.ts` before `--apply`.
 
@@ -74,5 +74,7 @@ devkit holds the shared CI workflows, hooks, templates and agent rules for the r
 - Every template carries the `managed by devkit vN` mark, and devkit's own managed files
   (`SECURITY.md`, `.gitleaks.toml`, `.github/zizmor.yml`, `renovate.json`) equal the
   rendered templates. Tests check both.
+- `devkit init` (`scripts/init.ts`) must write what `sync` would: its `INIT_FILES` equal the
+  `bun` and `python` profiles in `repos.yml`, and it reads nothing from `repos.yml` or GitHub.
 - Releasing: tag `v1.x.y` on `main`, push it, then move the `v1` tag to the same commit.
   Moving `v1` is the only tag that is ever re-pointed.

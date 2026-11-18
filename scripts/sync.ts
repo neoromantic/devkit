@@ -27,7 +27,7 @@ import {
   TEMPLATES_DIR,
 } from './lib/repos'
 
-interface Change {
+export interface Change {
   path: string
   action: FileAction | 'warn'
   note?: string
@@ -48,6 +48,23 @@ async function isSymlink(path: string): Promise<boolean> {
   return (await lstat(path).catch(() => null))?.isSymbolicLink() ?? false
 }
 
+/** True when the checkout's package.json declares a `bin` (a CLI). */
+export async function declaresBin(dir: string): Promise<boolean> {
+  const text = await readOrNull(join(dir, 'package.json'))
+  if (text === null) return false
+  try {
+    const bin = (JSON.parse(text) as { bin?: unknown }).bin
+    return typeof bin === 'string' ? bin !== '' : typeof bin === 'object' && bin !== null && Object.keys(bin).length > 0
+  } catch {
+    return false
+  }
+}
+
+/** Add `pack: true` to the ci-bun job's `with:` in the rendered Bun CI stub. */
+export function withPack(ci: string): string {
+  return ci.replace(/^(\s+)e2e: true\n/m, '$1e2e: true\n$1pack: true\n')
+}
+
 const SYMLINK_NOTE = 'is a symlink; devkit never writes through one. Replace it with a regular file by hand'
 
 async function writeFile(path: string, content: string): Promise<void> {
@@ -56,18 +73,26 @@ async function writeFile(path: string, content: string): Promise<void> {
 }
 
 /** Compute and write the desired state into a checkout. Returns what changed. */
-export async function syncCheckout(repo: Repo, dir: string, opts: { adopt: boolean }): Promise<Change[]> {
+export async function syncCheckout(
+  repo: Repo,
+  dir: string,
+  opts: { adopt: boolean; dryRun?: boolean },
+): Promise<Change[]> {
+  const write = opts.dryRun ? async () => {} : writeFile
   const changes: Change[] = []
   const vars = templateVars(repo)
+  // A Bun CLI's CI smoke-tests the packed package. Read from the checkout, not from repos.yml.
+  const pack = await declaresBin(dir)
   for (const [target, template] of Object.entries(repo.files)) {
     if (await isSymlink(join(dir, target))) {
       changes.push({ path: target, action: 'warn', note: SYMLINK_NOTE })
       continue
     }
-    const desired = render(await Bun.file(join(TEMPLATES_DIR, template)).text(), vars)
+    const rendered = render(await Bun.file(join(TEMPLATES_DIR, template)).text(), vars)
+    const desired = template === 'ci.bun.yml' && pack ? withPack(rendered) : rendered
     const existing = await readOrNull(join(dir, target))
     const action = planFile(existing, desired, opts.adopt)
-    if (action === 'create' || action === 'update' || action === 'adopt') await writeFile(join(dir, target), desired)
+    if (action === 'create' || action === 'update' || action === 'adopt') await write(join(dir, target), desired)
     changes.push({
       path: target,
       action,
@@ -90,12 +115,12 @@ export async function syncCheckout(repo: Repo, dir: string, opts: { adopt: boole
     const existing = await readOrNull(agentsPath)
     const desired = applyAgentsBlock(existing, block, repo.name)
     const action: FileAction = existing === desired ? 'ok' : existing === null ? 'create' : 'update'
-    if (action !== 'ok') await writeFile(agentsPath, desired)
+    if (action !== 'ok') await write(agentsPath, desired)
     changes.push({ path: 'AGENTS.md', action, note: 'devkit:agents block' })
 
     const claude = await readOrNull(claudePath)
     if (claude === null) {
-      await writeFile(claudePath, '@AGENTS.md\n')
+      await write(claudePath, '@AGENTS.md\n')
       changes.push({ path: 'CLAUDE.md', action: 'create' })
     } else if (claude.trim() !== '@AGENTS.md') {
       changes.push({
