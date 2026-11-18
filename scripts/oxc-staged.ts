@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { excludePathspecs } from "./lib/exclude.ts";
 
 export const FORMAT_CONFIG = ".oxfmtrc.jsonc";
 export const LINT_CONFIG = ".oxlintrc.devkit.jsonc";
@@ -50,7 +51,16 @@ export function main(argv: string[], cwd = process.cwd()) {
     return 0;
   }
   const root = git(cwd, ["rev-parse", "--show-toplevel"]).trim();
-  const staged = git(root, ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"])
+  const staged = git(root, [
+    "diff",
+    "--cached",
+    "--name-only",
+    "--diff-filter=ACMR",
+    "-z",
+    "--",
+    ".",
+    ...excludePathspecs(root),
+  ])
     .split("\0")
     .filter(Boolean);
   let ok = true;

@@ -54,6 +54,7 @@ describe("managed files come out formatted", () => {
       const names = new Set([
         ...resolveRepos(await loadReposFile()).flatMap((r) => Object.values(r.files)),
         ...Object.values(INIT_FILES).flatMap((files) => Object.values(files)),
+        "lefthook.private.yml",
       ]);
       for (const name of names) {
         await mkdir(dirname(join(dir, name)), { recursive: true });
