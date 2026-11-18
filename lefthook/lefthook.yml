@@ -1,7 +1,8 @@
 # managed by devkit v1: shared git hooks, pulled into each repo through lefthook `remotes`.
 # Needs gitleaks and Bun on PATH. Private markers: ~/.config/devkit/private-markers (mode 0600).
 # oxc.ts checks staged files with oxfmt and oxlint only in repos on the shared lint and format
-# standard (docs/standards/lint-format.md); elsewhere it does nothing.
+# standard (docs/standards/lint-format.md); elsewhere it does nothing. Before a push, knip.ts runs
+# the repo's own `bun run check:knip` when the root package.json has that script.
 pre-commit:
   parallel: true
   commands:
@@ -16,4 +17,8 @@ pre-commit:
     "privacy-scan.ts":
       runner: bun
     "oxc.ts":
+      runner: bun
+pre-push:
+  scripts:
+    "knip.ts":
       runner: bun

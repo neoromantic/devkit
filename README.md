@@ -22,10 +22,11 @@ Python and Go repos keep their native tools.
 | `.github/workflows/ci-python.yml` | Reusable CI for Python with uv: `uv sync`, `ruff check`, `pytest`                                                                                                                                                                                |
 | `.github/workflows/hygiene.yml`   | Reusable checks: actionlint, zizmor, gitleaks, privacy scan of added lines                                                                                                                                                                       |
 | `.github/workflows/self.yml`      | devkit's own CI, which runs the workflows above on devkit itself                                                                                                                                                                                 |
-| `lefthook/lefthook.yml`           | Shared pre-commit hooks: gitleaks, the privacy scan, and oxfmt and oxlint on staged files in repos on the shared standard                                                                                                                        |
-| `lefthook/private.yml`            | Pre-commit hooks for private repos: gitleaks and the oxfmt and oxlint check, without the privacy scan; paths in `.devkit-exclude` are never read                                                                                                 |
+| `lefthook/lefthook.yml`           | Shared hooks: gitleaks, the privacy scan, and oxfmt and oxlint on staged files in repos on the shared standard; Knip before a push                                                                                                               |
+| `lefthook/private.yml`            | Hooks for private repos: gitleaks and the oxfmt and oxlint check, without the privacy scan, and Knip before a push; pre-commit never reads paths in `.devkit-exclude`                                                                            |
 | `scripts/init.ts`                 | `devkit init`: sets up the repo you are in, including Knip, oxfmt and oxlint for Bun                                                                                                                                                             |
 | `scripts/oxc-staged.ts`           | The pre-commit check: oxfmt and oxlint on staged files, from each package that has the shared config                                                                                                                                             |
+| `scripts/knip-push.ts`            | The pre-push check: the repo's own `bun run check:knip`, when the root `package.json` has that script                                                                                                                                            |
 | `scripts/gitleaks-staged.ts`      | gitleaks on staged changes, outside the paths listed in `.devkit-exclude`                                                                                                                                                                        |
 | `scripts/privacy-scan.ts`         | Finds phone numbers, home paths and your private markers; prints only `path:line`                                                                                                                                                                |
 | `scripts/sync.ts`                 | Renders managed files and the AGENTS block into every repo; `--write` opens PRs                                                                                                                                                                  |
@@ -204,12 +205,18 @@ remotes:
 
 and run `lefthook install` once per clone.
 
+Before a push, the hooks run `bun run check:knip` when the root `package.json` has that script
+(`devkit init` adds it), so Knip findings stop the push instead of failing CI. Clones from before
+the hook run `lefthook install` once to add it.
+
 Private repos select `lefthook/private.yml` (the managed `templates/lefthook.private.yml`):
 gitleaks on staged changes and the oxfmt and oxlint check, without the public privacy scan.
 Paths that must never be read go in `.devkit-exclude` at the repo root, one git pathspec per
 line, `#` for comments. Both hooks drop them before any tool sees a file: gitleaks scans a
 temporary index without them, and the oxfmt and oxlint check never receives them. A scanner
-allowlist would only suppress findings. Repos without Bun keep `lefthook/secrets.yml`. Remote
+allowlist would only suppress findings. The pre-push Knip check runs the repo's own
+`check:knip`, which reads what the repo's Knip config reads; `.devkit-exclude` does not apply.
+Repos without Bun keep `lefthook/secrets.yml`. Remote
 hook settings take precedence over local `run` overrides, so repo-specific hooks get their
 own names. For CI use `gitleaks-log-opts` pathspecs, `zizmor-path: .github` and
 `boundary-scan: false`; `hygiene` never reads `.devkit-exclude`, so the CI list stays a

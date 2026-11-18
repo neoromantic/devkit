@@ -1,11 +1,17 @@
 # managed by devkit v1: shared git hooks for private repos, without the public privacy scan.
-# Needs gitleaks and Bun on PATH. Paths listed in the repo's .devkit-exclude are never read.
-# oxc.ts checks staged files with oxfmt and oxlint only in repos on the shared lint and format
-# standard (docs/standards/lint-format.md); elsewhere it does nothing.
+# Needs gitleaks and Bun on PATH. The pre-commit hooks never read paths listed in the repo's
+# .devkit-exclude. oxc.ts checks staged files with oxfmt and oxlint only in repos on the shared
+# lint and format standard (docs/standards/lint-format.md); elsewhere it does nothing. Before a
+# push, knip.ts runs the repo's own `bun run check:knip` when the root package.json has that
+# script; Knip reads what the repo's Knip config reads.
 pre-commit:
   parallel: true
   scripts:
     "gitleaks-staged.ts":
       runner: bun
     "oxc.ts":
+      runner: bun
+pre-push:
+  scripts:
+    "knip.ts":
       runner: bun
