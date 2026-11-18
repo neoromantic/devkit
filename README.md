@@ -337,7 +337,7 @@ Paid offers also follow [paid readiness](docs/standards/paid-readiness.md).
 bun install
 bun run format  # oxfmt
 bun run check   # oxfmt --check, oxlint, tsc --noEmit, then Knip
-bun run test    # bun test, offline
+bun run test    # bun test --parallel, offline
 actionlint && uvx zizmor --offline .
 ```
 
