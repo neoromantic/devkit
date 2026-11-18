@@ -22,24 +22,24 @@ export interface Change {
   note?: string;
 }
 
-function run(cmd: string[], cwd?: string): string {
+function run(cmd: string[], cwd?: string) {
   const proc = Bun.spawnSync(cmd, { cwd, stderr: "pipe" });
   if (proc.exitCode !== 0)
     throw new Error(`${cmd.join(" ")} failed: ${proc.stderr.toString().trim()}`);
   return proc.stdout.toString();
 }
 
-async function readOrNull(path: string): Promise<string | null> {
+async function readOrNull(path: string) {
   const f = Bun.file(path);
   return (await f.exists()) ? f.text() : null;
 }
 
-async function isSymlink(path: string): Promise<boolean> {
+async function isSymlink(path: string) {
   return (await lstat(path).catch(() => null))?.isSymbolicLink() ?? false;
 }
 
 /** True when the checkout's package.json declares a `bin` (a CLI). */
-export async function declaresBin(dir: string): Promise<boolean> {
+export async function declaresBin(dir: string) {
   const text = await readOrNull(join(dir, "package.json"));
   if (text === null) return false;
   try {
@@ -53,14 +53,14 @@ export async function declaresBin(dir: string): Promise<boolean> {
 }
 
 /** Add `pack: true` to the ci-bun job's `with:` in the rendered Bun CI stub. */
-export function withPack(ci: string): string {
+export function withPack(ci: string) {
   return ci.replace(/^(\s+)e2e: true\n/m, "$1e2e: true\n$1pack: true\n");
 }
 
 const SYMLINK_NOTE =
   "is a symlink; devkit never writes through one. Replace it with a regular file by hand";
 
-async function writeFile(path: string, content: string): Promise<void> {
+async function writeFile(path: string, content: string) {
   await Bun.$`mkdir -p ${dirname(path)}`.quiet();
   await Bun.write(path, content);
 }
@@ -70,7 +70,7 @@ export async function syncCheckout(
   repo: Repo,
   dir: string,
   opts: { adopt: boolean; dryRun?: boolean },
-): Promise<Change[]> {
+) {
   const write = opts.dryRun ? async () => {} : writeFile;
   const changes: Change[] = [];
   const vars = templateVars(repo);
@@ -132,7 +132,7 @@ export async function syncCheckout(
   return changes;
 }
 
-function printChanges(repo: Repo, changes: Change[]): void {
+function printChanges(repo: Repo, changes: Change[]) {
   console.log(`\n=== ${repo.fullName} (${repo.profile})`);
   for (const c of changes) {
     console.log(`  ${c.action.padEnd(6)} ${c.path}${c.note ? `  — ${c.note}` : ""}`);
@@ -141,7 +141,7 @@ function printChanges(repo: Repo, changes: Change[]): void {
 
 const WRITE_ACTIONS = new Set(["create", "update", "adopt"]);
 
-export async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]) {
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(
       "usage: sync [--dry-run | --write | --check] [--json] [--config path] [--only a,b] [--adopt] [--keep]",

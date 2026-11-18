@@ -47,46 +47,47 @@ export interface Repo extends RepoEntry {
   settings: Settings;
 }
 
-export async function loadReposFile(path = join(ROOT, "repos.yml")): Promise<ReposFile> {
+export async function loadReposFile(path = join(ROOT, "repos.yml")) {
   return Bun.YAML.parse(await Bun.file(path).text()) as ReposFile;
 }
 
-export function resolveRepos(file: ReposFile): Repo[] {
+export function resolveRepos(file: ReposFile) {
   return Object.entries(file.repos).map(([name, entry]) => {
     const profile = file.profiles[entry.profile];
     if (!profile) throw new Error(`repos.yml: ${name} uses unknown profile "${entry.profile}"`);
     const files: Record<string, string> = {
-      ...(file.files ?? {}),
-      ...(profile.files ?? {}),
-      ...(entry.files ?? {}),
+      ...file.files,
+      ...profile.files,
+      ...entry.files,
     };
     for (const path of entry.exclude ?? []) delete files[path];
-    return {
+    const repo: Repo = {
       ...entry,
       name,
       owner: file.owner,
       fullName: `${file.owner}/${name}`,
       files,
-      settings: { ...(file.settings ?? {}), ...(entry.settings ?? {}) },
+      settings: { ...file.settings, ...entry.settings },
     };
+    return repo;
   });
 }
 
 /** Frozen repos are skipped by sync and by repo-settings --apply. */
-export function isFrozen(repo: RepoEntry, today = new Date()): boolean {
+export function isFrozen(repo: RepoEntry, today = new Date()) {
   if (repo.frozen) return true;
   if (!repo.frozen_until) return false;
   return today.toISOString().slice(0, 10) <= repo.frozen_until;
 }
 
-export function selectRepos(repos: Repo[], only: string[]): Repo[] {
+export function selectRepos(repos: Repo[], only: string[]) {
   if (only.length === 0) return repos;
   const unknown = only.filter((n) => !repos.some((r) => r.name === n));
   if (unknown.length) throw new Error(`unknown repo(s): ${unknown.join(", ")}`);
   return repos.filter((r) => only.includes(r.name));
 }
 
-export function parseOnly(argv: string[]): string[] {
+export function parseOnly(argv: string[]) {
   const out: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--only") out.push(...(argv[++i] ?? "").split(",").filter(Boolean));
@@ -96,7 +97,7 @@ export function parseOnly(argv: string[]): string[] {
   return out;
 }
 
-export function gh(args: string[], input?: string): string {
+export function gh(args: string[], input?: string) {
   const proc = Bun.spawnSync(["gh", ...args], {
     stdin: input === undefined ? "ignore" : new TextEncoder().encode(input),
     stderr: "pipe",

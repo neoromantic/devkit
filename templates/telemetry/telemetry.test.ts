@@ -78,14 +78,14 @@ const newDir = () => mkdtempSync(join(root, "state-"));
 const stateFile = (dir: string) => join(dir, "telemetry.json");
 const readState = (dir: string) => JSON.parse(readFileSync(stateFile(dir), "utf8"));
 
-function seeded(extra: Record<string, unknown> = {}): string {
+function seeded(extra: Record<string, unknown> = {}) {
   const dir = newDir();
   const state = { id: ID, enabled: null, notice: 1, installed: true, daily: {}, ...extra };
   writeFileSync(stateFile(dir), JSON.stringify(state));
   return dir;
 }
 
-function make(overrides: Partial<TelemetryOptions> = {}): Telemetry {
+function make(overrides: Partial<TelemetryOptions> = {}) {
   return createTelemetry({
     product: "demo-cli",
     version: "1.2.3",
@@ -100,7 +100,7 @@ function make(overrides: Partial<TelemetryOptions> = {}): Telemetry {
   });
 }
 
-async function sent(t: Telemetry): Promise<Received[]> {
+async function sent(t: Telemetry) {
   await t.flush(2500);
   return received.splice(0);
 }
@@ -688,7 +688,7 @@ describe("state file", () => {
 describe("host storage: a BB plugin", () => {
   type Choice = "undecided" | "on" | "off";
 
-  function dbFile(): string {
+  function dbFile() {
     const file = join(newDir(), "data.db");
     const db = new Database(file);
     db.run("create table telemetry (id integer primary key check (id = 1), json text not null)");

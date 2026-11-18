@@ -134,11 +134,11 @@ interface State {
 }
 
 const norm = (value: string | undefined) => (value ?? "").trim().toLowerCase();
-const isSet = (value: string | undefined): boolean => norm(value) !== "";
+const isSet = (value: string | undefined) => norm(value) !== "";
 const cut = (text: string, max: number) => [...text].slice(0, max).join("");
 const quoteRe = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-function safe<T>(fn: () => T, fallback: T): T {
+function safe<T>(fn: () => T, fallback: T) {
   try {
     return fn();
   } catch {
@@ -146,15 +146,15 @@ function safe<T>(fn: () => T, fallback: T): T {
   }
 }
 
-function envDecision(endpoint: string, env: Env, prefix: string, version: string): Decision | null {
-  const off = (reason: Reason): Decision => ({ enabled: false, reason });
+function envDecision(endpoint: string, env: Env, prefix: string, version: string) {
+  const off = (reason: Reason) => ({ enabled: false, reason }) satisfies Decision;
   if (!endpoint) return off("no-endpoint");
   const dnt = norm(env.DO_NOT_TRACK);
   if (dnt !== "" && dnt !== "0" && dnt !== "false") return off("do-not-track");
   const own = norm(env[`${prefix}_TELEMETRY`]);
   if (["0", "off", "false"].includes(own)) return off("env");
-  if (own === "debug") return { enabled: true, reason: "env", debug: true };
-  if (["1", "on", "true"].includes(own)) return { enabled: true, reason: "env" };
+  if (own === "debug") return { enabled: true, reason: "env", debug: true } satisfies Decision;
+  if (["1", "on", "true"].includes(own)) return { enabled: true, reason: "env" } satisfies Decision;
   const ci = norm(env.CI);
   if ((ci && ci !== "false") || CI_VARS.some((k) => isSet(env[k]))) {
     return off("ci");
@@ -166,7 +166,7 @@ function envDecision(endpoint: string, env: Env, prefix: string, version: string
   return null;
 }
 
-function detectAgent(env: Env): string | undefined {
+function detectAgent(env: Env) {
   const named = norm(env.AI_AGENT).split("_")[0];
   if (named) return cut(named, 40);
   if (isSet(env.CLAUDECODE)) return "claude-code";
@@ -176,7 +176,7 @@ function detectAgent(env: Env): string | undefined {
   return undefined;
 }
 
-function scrub(text: string, env: Env): string {
+function scrub(text: string, env: Env) {
   const home = (env.HOME || env.USERPROFILE || safe(os.homedir, "")).replace(/[\\/]+$/, "");
   const swaps = new Map<string, string>();
   for (const h of [home, home.replaceAll("\\", "/")]) {
@@ -196,7 +196,7 @@ function scrub(text: string, env: Env): string {
   return cut(out.trim(), 300);
 }
 
-function errorProps(err: unknown, env: Env): Props {
+function errorProps(err: unknown, env: Env) {
   if (typeof err === "string") return { error_type: cut(err, 100) || "Error" };
   if (typeof err !== "object" || err === null) return { error_type: "Error" };
   const e = err as { code?: unknown; name?: unknown; message?: unknown };
@@ -209,7 +209,7 @@ function errorProps(err: unknown, env: Env): Props {
 }
 
 let system: Props | undefined;
-function systemProps(): Props {
+function systemProps() {
   if (system) return system;
   const p = process.platform;
   const names: Props = { darwin: "macOS", win32: "Windows", linux: "Linux" };
@@ -230,11 +230,11 @@ function systemProps(): Props {
   return system;
 }
 
-function readState(storage: TelemetryStorage): State {
+function readState(storage: TelemetryStorage) {
   const raw: Partial<Record<keyof State, unknown>> =
     safe(() => JSON.parse(storage.read() ?? "{}"), null) ?? {};
   const daily = typeof raw.daily === "object" && raw.daily ? raw.daily : {};
-  return {
+  const state: State = {
     id: typeof raw.id === "string" && UUID.test(raw.id) ? raw.id : null,
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : null,
     notice: typeof raw.notice === "number" ? raw.notice : 0,
@@ -243,9 +243,10 @@ function readState(storage: TelemetryStorage): State {
       Object.entries(daily).filter((e): e is [string, string] => typeof e[1] === "string"),
     ),
   };
+  return state;
 }
 
-function writeFile(file: string, json: string): boolean {
+function writeFile(file: string, json: string) {
   if (!file) return false;
   const tmp = `${file}.${process.pid}.tmp`;
   try {
@@ -259,7 +260,7 @@ function writeFile(file: string, json: string): boolean {
   }
 }
 
-function writeState(storage: TelemetryStorage, state: State): boolean {
+function writeState(storage: TelemetryStorage, state: State) {
   const { id, enabled, notice, installed, daily } = state;
   const json = JSON.stringify({ id, enabled, notice, installed, daily });
   return safe(() => storage.write(json), false);
@@ -280,7 +281,7 @@ function envelope(event: string, distinctId: string, properties: object) {
   };
 }
 
-async function deliver(endpoint: string, body: object, ua: string, debug = false): Promise<void> {
+async function deliver(endpoint: string, body: object, ua: string, debug = false) {
   try {
     const json = JSON.stringify(body);
     if (debug) {
@@ -307,14 +308,15 @@ function resolve(o: CaptureOptions) {
     o.mode ||
     (agent ? "agent" : tty(process.stdin) || tty(process.stderr) ? "interactive" : "script");
   const optional = ["$os_version", "channel", "agent"];
+  const fixed: Decision | null = envDecision(endpoint, env, prefix, `${o.version ?? ""}`);
   return {
     env,
     endpoint,
     mode,
-    fixed: envDecision(endpoint, env, prefix, `${o.version ?? ""}`),
+    fixed,
     noticeFits: () => !!agent || tty(process.stderr),
     ua: `${LIB}/${LIB_VERSION} (${o.product}/${o.version})`,
-    common: (): Props => {
+    common: () => {
       const props: Props = {
         product: o.product,
         $app_version: o.version,
@@ -340,7 +342,7 @@ export async function capture(
   properties: Record<string, unknown>,
   distinctId: string,
   options: CaptureOptions,
-): Promise<void> {
+) {
   try {
     const r = resolve(options);
     if (!event || r.fixed?.enabled === false) return;
@@ -350,7 +352,7 @@ export async function capture(
   } catch {}
 }
 
-export function createTelemetry(options: TelemetryOptions): Telemetry {
+export function createTelemetry(options: TelemetryOptions) {
   const r = resolve(options);
   const stateDir = options.stateDir;
   const stateFile = stateDir ? join(stateDir, "telemetry.json") : "";
@@ -365,14 +367,16 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
   const notice = `${options.product} shares usage stats with its author: how often it runs, which features are used, errors, version and OS, tied to a random install ID. It never sends your files, arguments or account names. Nothing has been sent yet. Turn it off with \`${off}\` or \`DO_NOT_TRACK=1\`. Details: ${NOTICE_URL}`;
   let quiet = false;
 
-  const decide = (state: State): Decision =>
-    r.fixed ?? {
+  const decide = (state: State) => {
+    const decision: Decision = r.fixed ?? {
       enabled: state.enabled ?? true,
       reason: state.enabled === null ? "default" : "state",
     };
+    return decision;
+  };
   const due = (state: State) => decide(state).enabled && state.notice < NOTICE_VERSION;
 
-  const seen = (state: State, silence: boolean): boolean => {
+  const seen = (state: State, silence: boolean) => {
     const first = state.notice < NOTICE_VERSION;
     state.notice = NOTICE_VERSION;
     state.id ??= randomUUID();
@@ -381,7 +385,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     return true;
   };
 
-  const track = (event: string, extra: Props, key: string): void => {
+  const track = (event: string, extra: Props, key: string) => {
     if (quiet || r.fixed?.enabled === false) return;
     const state = readState(storage);
     const decision = decide(state);
@@ -408,7 +412,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     }
   };
 
-  return {
+  const telemetry: Telemetry = {
     noticeText: () => safe(() => (due(readState(storage)) ? notice : null), null),
     showNotice: () =>
       safe(() => {
@@ -467,4 +471,5 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
         return writeState(storage, cleared);
       }, false),
   };
+  return telemetry;
 }

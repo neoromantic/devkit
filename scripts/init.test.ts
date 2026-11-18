@@ -55,7 +55,7 @@ async function writeJson(path: string, value: unknown) {
   await Bun.write(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-async function snapshot(dir: string): Promise<Record<string, string>> {
+async function snapshot(dir: string) {
   const out: Record<string, string> = {};
   for (const f of await readdir(dir, { recursive: true })) {
     if (f.startsWith(".git/") || f === ".git") continue;
@@ -65,8 +65,8 @@ async function snapshot(dir: string): Promise<Record<string, string>> {
   return out;
 }
 
-function syncRepo(profile: "bun" | "python"): Repo {
-  return {
+function syncRepo(profile: "bun" | "python") {
+  const repo: Repo = {
     name: "demo",
     owner: "someone",
     fullName: "someone/demo",
@@ -74,6 +74,7 @@ function syncRepo(profile: "bun" | "python"): Repo {
     files: INIT_FILES[profile],
     settings: {},
   };
+  return repo;
 }
 
 const actions = (r: { changes: { action: string; path: string }[] }) =>

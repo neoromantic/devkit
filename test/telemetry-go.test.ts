@@ -9,7 +9,7 @@ const template = join(root, "templates/telemetry/telemetry.go");
 const go = Bun.which("go");
 if (!go) console.warn("telemetry-go: skipping the Go client tests, `go` is not installed");
 
-function goMinor(cmd: string[]): number {
+function goMinor(cmd: string[]) {
   const out = Bun.spawnSync(cmd, { stdout: "pipe", stderr: "pipe" }).stdout.toString();
   return Number(/go1\.(\d+)/.exec(out)?.[1] ?? 0);
 }

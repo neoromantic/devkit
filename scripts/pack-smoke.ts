@@ -42,7 +42,7 @@ const INSTALL_ONLY = [
 
 export type Run = { cmd: string[]; exitCode: number | null; output: string; timedOut: boolean };
 
-export function parseArgs(raw: string | undefined): string[][] {
+export function parseArgs(raw: string | undefined) {
   if (!raw?.trim()) return [["--help"]];
   let value: unknown;
   try {
@@ -60,7 +60,7 @@ export function parseArgs(raw: string | undefined): string[][] {
 }
 
 /** Bin names and paths from a package.json, as npm resolves them. */
-export function binsOf(manifest: { name?: string; bin?: unknown }): Record<string, string> {
+export function binsOf(manifest: { name?: string; bin?: unknown }) {
   const { name = "", bin } = manifest;
   if (typeof bin === "string") return { [name.replace(/^@[^/]+\//, "")]: bin };
   if (bin && typeof bin === "object") {
@@ -71,23 +71,18 @@ export function binsOf(manifest: { name?: string; bin?: unknown }): Record<strin
   return {};
 }
 
-function inside(child: string, parent: string): boolean {
+function inside(child: string, parent: string) {
   const rel = relative(parent, child);
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
-function getEnv(name: string): string | undefined {
+function getEnv(name: string) {
   const key = Object.keys(process.env).find((k) => k.toUpperCase() === name);
   return key === undefined ? undefined : process.env[key];
 }
 
 /** An allowlisted environment: nothing from the job leaks in except locale, OS basics and PATH. */
-export function cleanEnv(opts: {
-  home: string;
-  tmp: string;
-  path: string[];
-  install?: boolean;
-}): Record<string, string> {
+export function cleanEnv(opts: { home: string; tmp: string; path: string[]; install?: boolean }) {
   const env: Record<string, string> = {};
   for (const name of opts.install ? [...KEEP, ...INSTALL_ONLY] : KEEP) {
     const value = getEnv(name);
@@ -111,7 +106,7 @@ export function cleanEnv(opts: {
   return env;
 }
 
-async function run(cmd: string[], cwd: string, env?: Record<string, string>): Promise<Run> {
+async function run(cmd: string[], cwd: string, env?: Record<string, string>) {
   const proc = Bun.spawn(cmd, { cwd, env, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -127,7 +122,7 @@ async function run(cmd: string[], cwd: string, env?: Record<string, string>): Pr
   return { cmd, exitCode: timedOut ? null : exitCode, output: (stdout + stderr).trim(), timedOut };
 }
 
-function show(r: Run, label: string): void {
+function show(r: Run, label: string) {
   const status = r.timedOut ? `timed out after ${TIMEOUT_MS / 1000}s` : `exit ${r.exitCode}`;
   console.log(`$ ${label}  (${status})`);
   const lines = r.output.split("\n");
@@ -139,7 +134,7 @@ function show(r: Run, label: string): void {
   );
 }
 
-function binPath(binDir: string, name: string): string | null {
+function binPath(binDir: string, name: string) {
   for (const candidate of WINDOWS ? [`${name}.exe`, name] : [name]) {
     const path = join(binDir, candidate);
     if (existsSync(path)) return path;
@@ -147,7 +142,7 @@ function binPath(binDir: string, name: string): string | null {
   return null;
 }
 
-export async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]) {
   const pkgDir = realpathSync(resolve(argv[0] ?? process.env.DEVKIT_PACK_DIR ?? "."));
   const manifest = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
   const argSets = parseArgs(process.env.DEVKIT_PACK_ARGS);

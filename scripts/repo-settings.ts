@@ -64,7 +64,7 @@ interface GitHubRepo {
   } | null;
 }
 
-export function stateFromApi(api: GitHubRepo, privateVulnerabilityReporting = false): RepoState {
+export function stateFromApi(api: GitHubRepo, privateVulnerabilityReporting = false) {
   return {
     description: api.description ?? "",
     homepage: api.homepage ?? "",
@@ -79,7 +79,7 @@ export function stateFromApi(api: GitHubRepo, privateVulnerabilityReporting = fa
   };
 }
 
-export function desiredState(repo: Repo): Partial<RepoState> {
+export function desiredState(repo: Repo) {
   const want: Partial<RepoState> = { ...repo.settings };
   if (repo.description !== undefined) want.description = repo.description;
   if (repo.homepage !== undefined) want.homepage = repo.homepage;
@@ -92,7 +92,7 @@ export function desiredState(repo: Repo): Partial<RepoState> {
  * force-pushed, and needs the checks to pass (not necessarily on the latest
  * main). Repository admins bypass it, so maintainers can still push directly.
  */
-export function desiredRuleset(checks: string[]): Ruleset {
+export function desiredRuleset(checks: string[]) {
   const rules: Ruleset["rules"] = [{ type: "deletion" }, { type: "non_fast_forward" }];
   if (checks.length) {
     rules.push({
@@ -122,7 +122,7 @@ interface GitHubRuleset {
   bypass_actors?: { actor_type: string; actor_id: number | null; bypass_mode: string }[];
 }
 
-export function rulesetFromApi(api: GitHubRuleset): Ruleset {
+export function rulesetFromApi(api: GitHubRuleset) {
   return {
     name: api.name,
     target: api.target ?? "branch",
@@ -138,11 +138,11 @@ export function rulesetFromApi(api: GitHubRuleset): Ruleset {
   };
 }
 
-function rulesetView(r: Ruleset): Record<string, string | string[]> {
+function rulesetView(r: Ruleset) {
   const checks = r.rules.find((x) => x.type === "required_status_checks")?.parameters as
     | StatusChecks
     | undefined;
-  return {
+  const view: Record<string, string | string[]> = {
     target: r.target,
     enforcement: r.enforcement,
     branches: [
@@ -156,10 +156,11 @@ function rulesetView(r: Ruleset): Record<string, string | string[]> {
     strict: String(checks?.strict_required_status_checks_policy ?? false),
     bypass: r.bypass_actors.map((a) => `${a.actor_type}:${a.actor_id ?? ""}:${a.bypass_mode}`),
   };
+  return view;
 }
 
 /** Differences between the current ruleset (null when missing) and the desired one. */
-export function diffRuleset(current: Ruleset | null, desired: Ruleset): RulesetDiff[] {
+export function diffRuleset(current: Ruleset | null, desired: Ruleset) {
   if (!current) return [{ field: "ruleset", current: null, desired: desired.name }];
   const now = rulesetView(current);
   const want = rulesetView(desired);
@@ -169,7 +170,7 @@ export function diffRuleset(current: Ruleset | null, desired: Ruleset): RulesetD
 }
 
 /** One ruleset diff line; a missing ruleset lists what will be created. */
-export function formatRulesetDiff(d: RulesetDiff, desired: Ruleset): string {
+export function formatRulesetDiff(d: RulesetDiff, desired: Ruleset) {
   if (d.field !== "ruleset") return formatDiff(d);
   const view = rulesetView(desired);
   const checks = view.required_checks?.length
@@ -178,14 +179,14 @@ export function formatRulesetDiff(d: RulesetDiff, desired: Ruleset): string {
   return `ruleset "${desired.name}": missing -> rules ${show(view.rules)}${checks}, bypass ${show(view.bypass)}`;
 }
 
-function same(a: unknown, b: unknown): boolean {
+function same(a: unknown, b: unknown) {
   if (Array.isArray(a) && Array.isArray(b)) {
     return a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i]);
   }
   return a === b;
 }
 
-export function diffSettings(current: RepoState, desired: Partial<RepoState>): SettingDiff[] {
+export function diffSettings(current: RepoState, desired: Partial<RepoState>) {
   const out: SettingDiff[] = [];
   for (const [field, want] of Object.entries(desired) as [
     keyof RepoState,
@@ -198,11 +199,7 @@ export function diffSettings(current: RepoState, desired: Partial<RepoState>): S
 }
 
 /** Split a diff into the REST calls that apply it. */
-export function applyPlan(diffs: SettingDiff[]): {
-  patch: Record<string, unknown>;
-  topics: string[] | null;
-  privateVulnerabilityReporting: boolean | null;
-} {
+export function applyPlan(diffs: SettingDiff[]) {
   const patch: Record<string, unknown> = {};
   const security: Record<string, { status: string }> = {};
   let topics: string[] | null = null;
@@ -219,7 +216,7 @@ export function applyPlan(diffs: SettingDiff[]): {
   return { patch, topics, privateVulnerabilityReporting };
 }
 
-function show(v: unknown): string {
+function show(v: unknown) {
   return Array.isArray(v) ? `[${v.join(", ")}]` : JSON.stringify(v);
 }
 
@@ -227,7 +224,7 @@ function show(v: unknown): string {
  * One diff line. Lists (topics) show only what is added and removed, so a
  * different order on GitHub never reads as a change.
  */
-export function formatDiff(d: SettingDiff | RulesetDiff): string {
+export function formatDiff(d: SettingDiff | RulesetDiff) {
   if (Array.isArray(d.current) && Array.isArray(d.desired)) {
     const now = d.current as string[];
     const want = d.desired as string[];
@@ -242,7 +239,7 @@ export function formatDiff(d: SettingDiff | RulesetDiff): string {
   return `${d.field}: ${show(d.current)} -> ${show(d.desired)}`;
 }
 
-function fetchRuleset(fullName: string): { id: number; body: Ruleset } | null {
+function fetchRuleset(fullName: string) {
   const list = JSON.parse(
     gh(["api", `repos/${fullName}/rulesets?includes_parents=false&per_page=100`]),
   ) as {
@@ -259,7 +256,7 @@ function fetchRuleset(fullName: string): { id: number; body: Ruleset } | null {
   };
 }
 
-export async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]) {
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(
       "usage: repo-settings [--apply | --check] [--json] [--config path] [--only a,b] [--include-frozen]",

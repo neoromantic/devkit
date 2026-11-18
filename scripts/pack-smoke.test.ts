@@ -23,7 +23,7 @@ let n = 0;
 function fixture(
   manifest: Record<string, unknown>,
   files: Record<string, string> = { "bin/cli.ts": CLI },
-): string {
+) {
   const pkg = join(dir, `pkg${n++}`);
   for (const [path, body] of Object.entries(files)) {
     mkdirSync(join(pkg, path, ".."), { recursive: true });

@@ -2,7 +2,7 @@
 import { parseArgs } from "node:util";
 import { gh, loadReposFile, parseOnly, resolveRepos, selectRepos } from "./lib/repos";
 
-export async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]) {
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log("usage: status [--json] [--config path] [--only a,b]");
     return 0;

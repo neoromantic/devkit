@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const root = join(import.meta.dir, "..");
 
-function findPython(): string | null {
+function findPython() {
   for (const name of ["python3", "python"]) {
     const path = Bun.which(name);
     if (!path) continue;

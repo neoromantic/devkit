@@ -21,17 +21,17 @@ export interface Hit {
 const PHONE_CANDIDATE = /(?<![\w+/=])\+\d[\d ().-]{7,20}\d(?![\w])/g;
 
 /** Digits of a phone-like string, or null when it is an obvious placeholder. */
-export function phoneDigits(candidate: string): string | null {
+export function phoneDigits(candidate: string) {
   const digits = candidate.replace(/\D/g, "");
   if (digits.length < 10 || digits.length > 15) return null;
   if (/^(\d)\1+$/.test(digits)) return null;
   if (digits.includes("1234567") || digits.includes("9876543")) return null;
-  if (/^1555/.test(digits)) return null;
+  if (digits.startsWith("1555")) return null;
   if ((digits.match(/0/g)?.length ?? 0) >= digits.length - 3) return null;
   return digits;
 }
 
-export function hasPhone(line: string): boolean {
+export function hasPhone(line: string) {
   for (const m of line.matchAll(PHONE_CANDIDATE)) {
     if (phoneDigits(m[0])) return true;
   }
@@ -41,7 +41,7 @@ export function hasPhone(line: string): boolean {
 const HOME_PATH =
   /(?:^|[^\w])(?:\/Users|\/home|[A-Za-z]:\\Users)[\\/](?!(?:runner|user|username|you|me|name|example|shared|Shared|Public|linuxbrew|USER|NAME)(?:[\\/]|$))[A-Za-z0-9._-]+[\\/]/;
 
-export function hasHomePath(line: string): boolean {
+export function hasHomePath(line: string) {
   return HOME_PATH.test(line);
 }
 
@@ -50,7 +50,7 @@ export const GENERIC_RULES: Rule[] = [
   { kind: "home-path", test: hasHomePath },
 ];
 
-function escapeRegExp(text: string): string {
+function escapeRegExp(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
@@ -59,7 +59,7 @@ function escapeRegExp(text: string): string {
  * `/body/flags` is a regex; anything else is a literal, case-insensitive.
  * Errors name the line number only, never the marker itself.
  */
-export function parseMarkers(text: string): Rule[] {
+export function parseMarkers(text: string) {
   const rules: Rule[] = [];
   text.split(/\r?\n/).forEach((raw, i) => {
     const line = raw.trim();
@@ -92,7 +92,7 @@ export interface IgnoreRule {
  * separated). No kinds means every kind. Blank lines and `#` comments are skipped.
  * For files that can't carry an inline allow comment, such as generated fixtures.
  */
-export function parseIgnore(text: string): IgnoreRule[] {
+export function parseIgnore(text: string) {
   const rules: IgnoreRule[] = [];
   text.split(/\r?\n/).forEach((raw, i) => {
     const line = raw.trim();
@@ -117,7 +117,7 @@ export function parseIgnore(text: string): IgnoreRule[] {
 }
 
 /** The rules that still apply to `path` once the ignore entries that match it are taken out. */
-export function rulesFor(path: string, rules: Rule[], ignore: IgnoreRule[]): Rule[] {
+export function rulesFor(path: string, rules: Rule[], ignore: IgnoreRule[]) {
   const matching = ignore.filter((ig) => ig.glob.match(path));
   if (matching.length === 0) return rules;
   return rules.filter(
@@ -125,7 +125,7 @@ export function rulesFor(path: string, rules: Rule[], ignore: IgnoreRule[]): Rul
   );
 }
 
-export function scanLine(line: string, rules: Rule[]): RuleKind | null {
+export function scanLine(line: string, rules: Rule[]) {
   if (line.includes(ALLOW_COMMENT)) return null;
   for (const rule of rules) {
     if (rule.test(line)) return rule.kind;
@@ -133,12 +133,7 @@ export function scanLine(line: string, rules: Rule[]): RuleKind | null {
   return null;
 }
 
-export function scanText(
-  path: string,
-  text: string,
-  rules: Rule[],
-  ignore: IgnoreRule[] = [],
-): Hit[] {
+export function scanText(path: string, text: string, rules: Rule[], ignore: IgnoreRule[] = []) {
   const hits: Hit[] = [];
   const active = rulesFor(path, rules, ignore);
   if (active.length === 0) return hits;
@@ -156,7 +151,7 @@ export interface AddedLine {
 }
 
 /** Added lines from `git diff -U0` output, with their line numbers in the new file. */
-export function parseUnifiedDiff(diff: string): AddedLine[] {
+export function parseUnifiedDiff(diff: string) {
   const out: AddedLine[] = [];
   const lines = diff.split("\n");
   let path: string | null = null;
@@ -204,7 +199,7 @@ export function parseUnifiedDiff(diff: string): AddedLine[] {
   return out;
 }
 
-function git(args: string[], cwd?: string): string {
+function git(args: string[], cwd?: string) {
   const proc = Bun.spawnSync(["git", "-c", "core.quotePath=false", ...args], {
     cwd,
     stderr: "pipe",
@@ -215,7 +210,7 @@ function git(args: string[], cwd?: string): string {
   return proc.stdout.toString();
 }
 
-function scanAdded(added: AddedLine[], rules: Rule[], ignore: IgnoreRule[]): Hit[] {
+function scanAdded(added: AddedLine[], rules: Rule[], ignore: IgnoreRule[]) {
   const hits: Hit[] = [];
   for (const a of added) {
     const kind = scanLine(a.text, rulesFor(a.path, rules, ignore));
@@ -224,7 +219,7 @@ function scanAdded(added: AddedLine[], rules: Rule[], ignore: IgnoreRule[]): Hit
   return hits;
 }
 
-async function readTextFile(path: string): Promise<string | null> {
+async function readTextFile(path: string) {
   const file = Bun.file(path);
   if (!(await file.exists()) || file.size > MAX_FILE_BYTES) return null;
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -232,7 +227,7 @@ async function readTextFile(path: string): Promise<string | null> {
   return new TextDecoder().decode(bytes);
 }
 
-async function* walk(path: string): AsyncGenerator<string> {
+async function* walk(path: string) {
   const stat = await Bun.file(path)
     .stat()
     .catch(() => null);
@@ -248,13 +243,13 @@ async function* walk(path: string): AsyncGenerator<string> {
   }
 }
 
-export function defaultMarkersPath(): string {
+export function defaultMarkersPath() {
   return (
     process.env.DEVKIT_PRIVATE_MARKERS || join(homedir(), ".config", "devkit", "private-markers")
   );
 }
 
-export async function loadMarkerRules(path: string, warn: (msg: string) => void): Promise<Rule[]> {
+export async function loadMarkerRules(path: string, warn: (msg: string) => void) {
   const file = Bun.file(path);
   if (!(await file.exists())) {
     warn(`privacy-scan: no private markers at ${path}; using generic patterns only`);
@@ -268,7 +263,7 @@ export async function loadMarkerRules(path: string, warn: (msg: string) => void)
 }
 
 /** The repo's `.privacy-scan-ignore` at the git root (or the current folder outside git), if any. */
-export async function loadIgnoreRules(): Promise<IgnoreRule[]> {
+export async function loadIgnoreRules() {
   let root = process.cwd();
   try {
     root = git(["rev-parse", "--show-toplevel"]).trim() || root;
@@ -292,7 +287,7 @@ Files that can't carry that comment, such as generated fixtures, go in ${IGNORE_
 repo root: one path glob per line, optionally followed by the kinds it silences
 (marker, phone, home-path; comma separated, default all). Paths are relative to the repo root.`;
 
-export async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]) {
   let mode: "staged" | "diff" | "all" | "paths" = "staged";
   let range = "";
   let markersPath: string | null = defaultMarkersPath();

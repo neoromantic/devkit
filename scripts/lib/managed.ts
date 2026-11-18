@@ -4,11 +4,11 @@ export const MANAGED_MARK = "managed by devkit";
 export const AGENTS_BEGIN = /<!-- devkit:agents v\d+ -->/;
 export const AGENTS_END = "<!-- /devkit:agents -->";
 
-export function isManaged(content: string): boolean {
+export function isManaged(content: string) {
   return content.includes(MANAGED_MARK);
 }
 
-export function templateVars(repo: Repo): Record<string, string> {
+export function templateVars(repo: Repo) {
   return {
     owner: repo.owner,
     name: repo.name,
@@ -19,7 +19,7 @@ export function templateVars(repo: Repo): Record<string, string> {
 }
 
 /** Replace `{{var}}` placeholders. Unknown placeholders are an error, so typos don't ship. */
-export function render(template: string, vars: Record<string, string>): string {
+export function render(template: string, vars: Record<string, string>) {
   return template.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, key: string) => {
     const value = vars[key];
     if (value === undefined) throw new Error(`unknown template variable {{${key}}}`);
@@ -33,7 +33,7 @@ export function render(template: string, vars: Record<string, string>): string {
  *  - no block -> inserted after the first `# ` heading, or at the top;
  *  - no file -> a new AGENTS.md with the block and an empty `## Project` section.
  */
-export function applyAgentsBlock(existing: string | null, block: string, repoName: string): string {
+export function applyAgentsBlock(existing: string | null, block: string, repoName: string) {
   const body = block.trim();
   if (existing === null) {
     return `# ${repoName}\n\n${body}\n\n## Project\n\nProject-specific rules go here, below the devkit block.\n`;
@@ -45,7 +45,7 @@ export function applyAgentsBlock(existing: string | null, block: string, repoNam
   }
   const lines = existing.split("\n");
   const firstContent = lines.findIndex((l) => l.trim() !== "");
-  if (firstContent !== -1 && /^# /.test(lines[firstContent] ?? "")) {
+  if (firstContent !== -1 && (lines[firstContent] ?? "").startsWith("# ")) {
     const head = lines.slice(0, firstContent + 1).join("\n");
     const rest = lines
       .slice(firstContent + 1)
@@ -58,7 +58,7 @@ export function applyAgentsBlock(existing: string | null, block: string, repoNam
 
 export type FileAction = "ok" | "create" | "update" | "adopt" | "skip";
 
-export function planFile(existing: string | null, desired: string, adopt: boolean): FileAction {
+export function planFile(existing: string | null, desired: string, adopt: boolean) {
   if (existing === desired) return "ok";
   if (existing === null) return "create";
   if (isManaged(existing)) return "update";

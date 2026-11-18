@@ -101,7 +101,7 @@ type PackageJson = Record<string, unknown> & {
 
 export type PackageManager = "bun" | "npm" | "pnpm" | "yarn";
 
-export function detectPackageManager(pkg: PackageJson, names: Set<string>): PackageManager {
+export function detectPackageManager(pkg: PackageJson, names: Set<string>) {
   const declared = typeof pkg.packageManager === "string" ? pkg.packageManager.split("@")[0] : "";
   if (declared === "bun" || declared === "npm" || declared === "pnpm" || declared === "yarn")
     return declared;
@@ -116,20 +116,17 @@ export function detectPackageManager(pkg: PackageJson, names: Set<string>): Pack
  * Add Knip to a package.json: the pinned devDependency, `check:knip` and its place in `check`.
  * Leaves every existing script and dependency as it is. Returns the new object and what changed.
  */
-export function planKnip(
-  pkg: PackageJson,
-  knipVersion: string,
-): { pkg: PackageJson; notes: string[] } {
+export function planKnip(pkg: PackageJson, knipVersion: string) {
   const out: PackageJson = structuredClone(pkg);
   const notes: string[] = [];
   if (!out.dependencies?.knip && !out.devDependencies?.knip) {
-    const dev = { ...(out.devDependencies ?? {}), knip: knipVersion };
+    const dev = { ...out.devDependencies, knip: knipVersion };
     out.devDependencies = Object.fromEntries(
       Object.entries(dev).sort(([a], [b]) => a.localeCompare(b)),
     );
     notes.push(`devDependencies.knip ${knipVersion}`);
   }
-  const scripts = { ...(out.scripts ?? {}) };
+  const scripts = { ...out.scripts };
   if (!/\bknip\b/.test(scripts.check ?? "")) {
     if (!scripts["check:knip"]) {
       scripts["check:knip"] = "knip";
@@ -150,10 +147,7 @@ export function planKnip(
  * `format:check` and `lint` scripts, and `check` running the format check and lint first.
  * Existing scripts that use other tools stay and get a note. Returns the new object and notes.
  */
-export function planOxc(
-  pkg: PackageJson,
-  versions: Record<string, string>,
-): { pkg: PackageJson; notes: string[]; advice: string[] } {
+export function planOxc(pkg: PackageJson, versions: Record<string, string>) {
   const out: PackageJson = structuredClone(pkg);
   const notes: string[] = [];
   const advice: string[] = [];
@@ -161,7 +155,7 @@ export function planOxc(
     (name) => !out.dependencies?.[name] && !out.devDependencies?.[name],
   );
   if (missing.length) {
-    const dev = { ...(out.devDependencies ?? {}) };
+    const dev = { ...out.devDependencies };
     for (const name of missing) {
       const version = versions[name];
       if (!version) throw new Error(`devkit package.json has no ${name} devDependency`);
@@ -172,7 +166,7 @@ export function planOxc(
       Object.entries(dev).sort(([a], [b]) => a.localeCompare(b)),
     );
   }
-  const scripts = { ...(out.scripts ?? {}) };
+  const scripts = { ...out.scripts };
   if (!scripts.format) {
     scripts.format = OXC_SCRIPTS.format as string;
     notes.push("scripts.format");
@@ -208,26 +202,26 @@ export function planOxc(
 }
 
 /** `owner/name` from a GitHub URL, `github:owner/name` or `owner/name`. */
-export function parseGitHubRepo(value: string): { owner: string; name: string } | null {
+export function parseGitHubRepo(value: string) {
   const m =
     /github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(value.trim()) ??
     /^(?:github:)?([\w.-]+)\/([\w.-]+)$/.exec(value.trim());
   return m?.[1] && m[2] ? { owner: m[1], name: m[2] } : null;
 }
 
-function gitOrigin(dir: string): string {
+function gitOrigin(dir: string) {
   const proc = Bun.spawnSync(["git", "-C", dir, "remote", "get-url", "origin"], {
     stderr: "ignore",
   });
   return proc.exitCode === 0 ? proc.stdout.toString().trim() : "";
 }
 
-async function readText(path: string): Promise<string | null> {
+async function readText(path: string) {
   const f = Bun.file(path);
   return (await f.exists()) ? f.text() : null;
 }
 
-async function exists(path: string): Promise<boolean> {
+async function exists(path: string) {
   return (
     (await Bun.file(path).exists()) ||
     (await readdir(path).then(
@@ -237,7 +231,7 @@ async function exists(path: string): Promise<boolean> {
   );
 }
 
-async function usesPythonWorkflow(dir: string): Promise<boolean> {
+async function usesPythonWorkflow(dir: string) {
   const workflows = join(dir, ".github", "workflows");
   const reference = "neoromantic/devkit/.github/workflows/ci-python.yml@";
   for (const file of await readdir(workflows).catch(() => [] as string[])) {
@@ -251,7 +245,7 @@ async function usesPythonWorkflow(dir: string): Promise<boolean> {
   return false;
 }
 
-function detectIndent(text: string): string | number {
+function detectIndent(text: string) {
   const m = /\n([ \t]+)"/.exec(text);
   return m?.[1] ?? 2;
 }
@@ -275,7 +269,7 @@ export interface InitResult {
   notes: string[];
 }
 
-export async function init(opts: InitOptions): Promise<InitResult> {
+export async function init(opts: InitOptions) {
   const dir = resolve(opts.dir);
   const names = new Set(await readdir(dir));
   const pkgText = names.has("package.json") ? await readText(join(dir, "package.json")) : null;
@@ -522,10 +516,19 @@ export async function init(opts: InitOptions): Promise<InitResult> {
   ) {
     notes.push("Dry run: nothing was written. Run again without --dry-run.");
   }
-  return { dir, profile, repo: repo.fullName, packageManager: pm, written: write, changes, notes };
+  const result: InitResult = {
+    dir,
+    profile,
+    repo: repo.fullName,
+    packageManager: pm,
+    written: write,
+    changes,
+    notes,
+  };
+  return result;
 }
 
-export async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]) {
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(
       "usage: init [--dir path] [--dry-run] [--json] [--repo owner/name] [--profile bun|python] [--adopt] [--no-install]",
