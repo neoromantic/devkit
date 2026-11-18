@@ -238,7 +238,8 @@ their own.
 ```
 
 Weekly on Monday morning (UTC), 3-day minimum release age, non-major updates grouped, automerge
-only for dev tooling, action digests, devkit itself and lockfile maintenance, and never for `0.x`.
+only for dev tooling, action digests, devkit itself and lockfile maintenance, and never for `0.x`. msw majors are held, because msw 3 does not intercept
+`fetch` under Bun 1.4.
 `renovate/maintenance` is the same without major updates.
 
 ## Maintain the fleet
