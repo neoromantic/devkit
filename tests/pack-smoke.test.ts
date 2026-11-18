@@ -176,7 +176,7 @@ describe("ci-bun.yml pack step", () => {
       /\n {6}pack:\n {8}description: .+\n {8}type: boolean\n {8}default: false\n/,
     );
     expect(workflow).toMatch(
-      /\n {6}pack-args:\n {8}description: .+\n {8}type: string\n {8}default: ''\n/,
+      /\n {6}pack-args:\n {8}description: .+\n {8}type: string\n {8}default: ""\n/,
     );
   });
 
