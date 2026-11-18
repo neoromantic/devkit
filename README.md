@@ -36,7 +36,7 @@ Python and Go repos keep their native tools.
 | `templates/`                      | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml` (public and private), `.oxfmtrc.jsonc`, `.oxlintrc.devkit.jsonc`, `.oxlintrc.devkit.react.jsonc` |
 | `templates/telemetry/`            | Single-file usage telemetry clients for TypeScript, Go and Python, with no dependencies                                                                                                                                                          |
 | `renovate/`                       | Renovate presets: `default` and `maintenance` (no majors)                                                                                                                                                                                        |
-| `docs/standards/`                 | README, docs, product content, paid readiness, delivery, Homebrew, agent-instruction, security, usage telemetry, code patterns, testing, and lint and format standards                                                                           |
+| `docs/standards/`                 | README, docs, product content, paid readiness, delivery, Homebrew, agent-instruction, security, usage telemetry, code patterns, testing, CI speed, and lint and format standards                                                                 |
 
 ## Use it in a repo
 
@@ -172,7 +172,13 @@ merges; use auto-merge where available and report any pending checks.
 
 `ci-python.yml` inputs: `python-version` (JSON list; `""` means `.python-version`), `os`,
 `working-directory`, `ruff`, `test-command` (default `pytest -q`), `test-with` (extra packages),
-`persistent-venv` (default off). Without a ruff of its own, a project gets ruff 0.17.5.
+`persistent-venv` (default off). Without a ruff of its own, a project gets ruff 0.17.5. The
+Python stub runs one Python, from `.python-version`, and its tests in parallel workers:
+`test-with: pytest-xdist` and `test-command: pytest -q -n auto`.
+
+What a pull request runs, which jobs it skips and when a cache is worth it are in
+[the CI speed standard](docs/standards/ci-speed.md): one runtime version per language on pull
+requests, other versions and platforms after merge, on a schedule or on request.
 
 `hygiene.yml` inputs: `actionlint`, `zizmor`, `gitleaks`, `boundary-scan` (all on), `devkit-ref`,
 `runner` (JSON label array, default `["ubuntu-latest"]`), `zizmor-path` (default `.`), and
