@@ -59,8 +59,8 @@ the database as a parameter.
   chain. It does not see `bun:test`'s `mock(impl)`, or `jest` and `vi` imported from
   `bun:test`; those follow the same rule in review. `mock.module` is linted separately.
 - `mock.module` replaces a module for the whole test process, and `mock.restore()` does not
-  undo it. A listed `mock.module` exception runs with `bun test --isolate`, spreads the real
-  exports into the factory and replaces only what the boundary needs.
+  undo it. A listed `mock.module` exception runs with `bun test --isolate` (`--parallel` implies
+  it), spreads the real exports into the factory and replaces only what the boundary needs.
 
 ## Time and waiting
 
@@ -91,9 +91,14 @@ the database as a parameter.
   (`tmp_path` in pytest, `t.TempDir()` in Go), a server on port 0 that the test asks for its real
   port (`Bun.serve({ port: 0 })`, `httptest.NewServer`), its own database file and its own
   environment. No fixed paths, fixed ports or output files that two tests share. A preload or
-  conftest that moves state to a temp dir makes a new one per worker, never a fixed folder.
-- `bun test --parallel` implies `--isolate`: each file gets fresh globals and modules, and the
-  workers share only what is outside the process, such as files, ports and databases.
+  conftest that moves state to a temp dir makes a new one with `mkdtemp` each time it runs and
+  removes it afterwards: in the system temp dir, never a fixed folder or one in the checkout.
+- `bun test --parallel` implies `--isolate`: each file gets fresh globals and modules, and runs
+  its preload again. Files share only what is outside the process, such as files, ports and
+  databases.
+- When a few files are much slower than the rest, `--timings=test-timings.json` in the script
+  makes `--parallel` start them first. Commit the file and refresh it with `--update-timings`
+  after big test changes; a stale entry only costs speed.
 - pytest-xdist workers are separate processes: a session-scoped fixture runs once per worker.
   Work that must happen once per run, such as a build, runs before pytest. Debug one test
   serially with `-n 0`.
@@ -134,5 +139,7 @@ A repo-wide test cleanup, one subsystem at a time. Hand this section to whoever 
 
 - Validate a change with the targeted checks, tests and builds it affects. Wait for the full CI
   run only when the task needs its result; required checks still gate merges.
+- `bun test --changed=main` runs only the test files that import a file changed since `main`: a
+  quick local pass before the full suite. CI runs the full suite.
 - Checks are read-only. Lint, the format check and dependency checks report drift and never fix
   it in CI or hooks. `bun run format` is the one command that rewrites files.
