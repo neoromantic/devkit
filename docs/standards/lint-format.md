@@ -14,7 +14,13 @@ own tools.
   plugins, as errors.
 - **landmines**: the full `recommended` set as errors: the `landmines-testing` rules,
   `landmines-style/no-comments`, `landmines-structure/*` and
-  `landmines-types/no-explicit-return-types`.
+  `landmines-types/no-explicit-return-types`. `landmines-structure/package-exports` needs
+  explicit `exports` entrypoints: a wildcard that maps `./*` to source files fails (see the
+  [code patterns standard](code-patterns.md#workspaces)).
+- **bun:test gaps**: two built-in rules cover what landmines misses in Bun tests:
+  `no-restricted-properties` bans `mock.module`, and `no-restricted-imports` bans
+  `setDefaultTimeout` from `bun:test`. The other Bun shapes landmines doesn't see are in the
+  [testing standard](testing.md#doubles).
 
 Warnings fail too (`oxlint --deny-warnings`), so the output is either empty or a list of
 things to fix.
@@ -30,21 +36,32 @@ an older one.
   (`oxlint --deny-warnings`) first, then the type check and Knip. `ci-bun` runs `check`.
 - Pre-commit: the shared lefthook config checks staged files with oxfmt and oxlint, from the
   folder that holds `.oxfmtrc.jsonc` or `.oxlintrc.devkit.jsonc`. In a repo without them it
-  does nothing.
+  does nothing. It skips paths listed in `.devkit-exclude`.
+- In a repo with several workspaces, lint and format run once from the root, where the managed
+  configs live.
 
 ## Where the config lives
 
-| File                     | Owner                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------- |
-| `.oxfmtrc.jsonc`         | devkit (managed): the shared oxfmt config.                                      |
-| `.oxlintrc.devkit.jsonc` | devkit (managed): the shared oxlint config.                                     |
-| `.oxlintrc.json`         | The repo: `extends` the shared config and holds this repo's exceptions.         |
-| `.prettierignore`        | The repo, if needed: paths oxfmt must leave alone, such as byte-exact fixtures. |
+| File                     | Owner                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| `.oxfmtrc.jsonc`         | devkit (managed): the shared oxfmt config.                                          |
+| `.oxlintrc.devkit.jsonc` | devkit (managed): the shared oxlint config.                                         |
+| `.oxlintrc.json`         | The repo: `extends` the shared config and holds this repo's exceptions.             |
+| `.prettierignore`        | The repo, if needed: paths oxfmt leaves alone: byte-exact fixtures, vendored files. |
 
 `devkit init` sets all of this up in a Bun repo: the pinned `oxlint`, `oxfmt` and
 `@interfere/landmines` devDependencies, the `format`, `format:check` and `lint` scripts,
 `check` running them, and `.oxlintrc.json`. Then run `bun run format` once, commit the
 result on its own, and fix what `bun run lint` reports.
+
+## Markdown
+
+oxfmt formats Markdown too: it pads tables and formats fenced code blocks in their language. An
+ordered list that starts above 1 directly under a paragraph line is paragraph text in
+CommonMark, and oxfmt joins it into the paragraph; put a blank line before the list. Markdown
+that a program reads, such as parser fixtures, generated files or vendored files pinned by hash
+(installed agent skills), goes in `.prettierignore`. When a repo adopts the standard, it formats
+everything, docs included, in one commit of its own.
 
 ## Exceptions
 
@@ -69,7 +86,21 @@ a protocol client that the HTTP mocking library can't serve.
    }
    ```
 
-   Other rules get an `overrides` entry for the files in question, not a repo-wide switch.
+   Other rules get an `overrides` entry for the files in question, not a repo-wide switch:
+
+   ```json
+   {
+     "overrides": [
+       {
+         "files": ["src/client/mtproto.test.ts"],
+         "rules": { "no-restricted-properties": "off" }
+       }
+     ]
+   }
+   ```
+
+   oxlint replaces a rule's options instead of merging them. A repo that sets its own
+   `no-restricted-properties` or `no-restricted-imports` repeats devkit's entries.
 
 2. A published library sets `publicApi` on `landmines-style/no-comments` to its entrypoints,
    so TSDoc on its public API stays:

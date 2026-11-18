@@ -10,6 +10,33 @@ authorise owner-only steps.
 | Web service                   | Production deployment URL and source revision, checked live                          |
 | Desktop app                   | Published build and update channel, through the owner's release procedure            |
 
+## Web services
+
+A merge or a green CI run is not delivery. A web change is delivered when a production
+deployment built from a commit that contains it is live.
+
+1. Use the hosting platform as the status source. GitHub deployment records can lag or be
+   missing; their absence alone is not a failure.
+2. Find the production deployment for the merge commit and wait for it with one blocking
+   command, such as `vercel inspect <url> --wait --timeout 10m`, not a polling loop. Select only
+   the fields you need from JSON output.
+3. A build skipped by path filtering leaves an earlier commit live. Confirm that the change does
+   not touch that service, or that the live commit contains it.
+4. Check that the deployment is ready and serves the production domain. Then fetch the live
+   page: expect HTTP 200 (or the documented redirect) and a marker of the change, such as the
+   title or new text:
+
+   ```sh
+   curl -sS -o /dev/null -w '%{http_code}\n' https://example.com/
+   curl -fsS https://example.com/ | grep -o '<title>[^<]*</title>'
+   ```
+
+5. Check the changed user flow in a browser, as the [product content standard](product-content.md)
+   describes.
+
+Record the deployment URL, source commit and time of the check. Each web service documents its
+production integrations, its preview boundaries and how to roll back.
+
 ## Versions
 
 - Versioned products use SemVer, with one source of truth per product. A web service may use
@@ -17,6 +44,8 @@ authorise owner-only steps.
   - Bun/TS: `version` in `package.json` (read it at runtime; never hardcode it elsewhere).
   - Python: `version` in `pyproject.toml`; update any required manifests through the local procedure.
   - Go: the git tag.
+- A repo with several versioned products tags each one `<product>/vX.Y.Z` and keeps its version
+  in that product's own manifest.
 - `0.x` means anything may change in a minor. Renovate never automerges `0.x` updates.
 
 ## Engine
