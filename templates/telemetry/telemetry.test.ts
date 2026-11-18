@@ -46,6 +46,7 @@ const received: Received[] = [];
 let server: ReturnType<typeof Bun.serve>;
 let endpoint = "";
 let root = "";
+const slow = Promise.withResolvers<void>();
 
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), "devkit-telemetry-ts-"));
@@ -54,7 +55,7 @@ beforeAll(() => {
     hostname: "127.0.0.1",
     async fetch(req) {
       if (new URL(req.url).pathname.startsWith("/slow/")) {
-        await Bun.sleep(2000);
+        await slow.promise;
         return new Response("late");
       }
       const body = (await req.json()) as Body;
@@ -70,6 +71,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  slow.resolve();
   server.stop(true);
   rmSync(root, { recursive: true, force: true });
 });
