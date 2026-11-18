@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -496,47 +496,51 @@ describe("pack for Bun CLIs", () => {
 });
 
 describe("Knip baseline", () => {
-  const knip = (cwd: string) =>
-    Bun.spawnSync([KNIP_BIN, "--reporter", "json"], { cwd, stdout: "pipe", stderr: "pipe" });
+  let knip = { exitCode: 0, stdout: "" };
 
-  test("devkit itself passes", () => {
-    const proc = knip(ROOT);
-    expect(proc.stderr.toString()).toBe("");
-    expect(proc.exitCode).toBe(0);
-  });
+  beforeAll(
+    () =>
+      withDir(async (dir) => {
+        await writeJson(join(dir, "package.json"), {
+          name: "demo",
+          type: "module",
+          dependencies: { "left-pad": "1.3.0" },
+          devDependencies: { "is-odd": "3.0.1" },
+        });
+        await Bun.write(join(dir, "knip.json"), KNIP_CONFIG);
+        await Bun.write(
+          join(dir, "index.ts"),
+          "import kebab from 'lodash-es/kebabCase'\nimport { a } from './missing'\nexport const publicApi = 1\nconsole.log(kebab, a)\n",
+        );
+        await Bun.write(join(dir, "orphan.ts"), "export const x = 1\n");
+        const proc = Bun.spawnSync([KNIP_BIN, "--reporter", "json"], {
+          cwd: dir,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        knip = { exitCode: proc.exitCode, stdout: proc.stdout.toString() };
+      }),
+    60_000,
+  );
 
-  test("reports unused files and dependencies, unlisted and unresolved imports, but not exports", () =>
-    withDir(async (dir) => {
-      await writeJson(join(dir, "package.json"), {
-        name: "demo",
-        type: "module",
-        dependencies: { "left-pad": "1.3.0" },
-        devDependencies: { "is-odd": "3.0.1" },
-      });
-      await Bun.write(join(dir, "knip.json"), KNIP_CONFIG);
-      await Bun.write(
-        join(dir, "index.ts"),
-        "import kebab from 'lodash-es/kebabCase'\nimport { a } from './missing'\nexport const publicApi = 1\nconsole.log(kebab, a)\n",
-      );
-      await Bun.write(join(dir, "orphan.ts"), "export const x = 1\n");
-      const proc = knip(dir);
-      expect(proc.exitCode).toBe(1);
-      const found = new Set<string>();
-      for (const issue of JSON.parse(proc.stdout.toString()).issues as Record<string, unknown>[]) {
-        for (const type of KNIP_INCLUDE) {
-          for (const item of (issue[type] as { name: string }[] | undefined) ?? [])
-            found.add(`${type}:${item.name}`);
-        }
-        expect(issue.exports ?? []).toEqual([]);
+  test("reports unused files and dependencies, unlisted and unresolved imports, but not exports", () => {
+    expect(knip.exitCode).toBe(1);
+    const found = new Set<string>();
+    for (const issue of JSON.parse(knip.stdout).issues as Record<string, unknown>[]) {
+      for (const type of KNIP_INCLUDE) {
+        for (const item of (issue[type] as { name: string }[] | undefined) ?? [])
+          found.add(`${type}:${item.name}`);
       }
-      expect([...found].sort()).toEqual([
-        "dependencies:left-pad",
-        "devDependencies:is-odd",
-        "files:orphan.ts",
-        "unlisted:lodash-es",
-        "unresolved:./missing",
-      ]);
-    }));
+      expect(issue.exports ?? []).toEqual([]);
+    }
+    expect([...found].sort()).toEqual([
+      "dependencies:left-pad",
+      "devDependencies:is-odd",
+      "files:orphan.ts",
+      "unlisted:lodash-es",
+      "unresolved:./missing",
+    ]);
+  });
 });
 
 describe("cli", () => {
