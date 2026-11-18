@@ -1,0 +1,13 @@
+// managed by devkit v1: edit in https://github.com/neoromantic/devkit/blob/main/templates/.oxlintrc.devkit.react.jsonc
+// The shared React rules (docs/standards/lint-format.md#react), on top of .oxlintrc.devkit.jsonc.
+// This repo's exceptions go in .oxlintrc.json.
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "jsx-a11y"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/jsx-no-comment-textnodes": "error",
+    "jsx-a11y/control-has-associated-label": "off",
+    "jsx-a11y/prefer-tag-over-role": "off",
+  },
+}

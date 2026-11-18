@@ -1,0 +1,15 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "devkit app: the default preset for repos whose default branch deploys to production; nothing that changes the build merges itself",
+  "extends": ["github>neoromantic/devkit//renovate/default"],
+  "lockFileMaintenance": {
+    "automerge": false
+  },
+  "packageRules": [
+    {
+      "description": "In an app, dev tools build what ships: their updates wait for review",
+      "matchDepTypes": ["devDependencies", "dependency-groups", "tool.uv.dev-dependencies"],
+      "automerge": false
+    }
+  ]
+}

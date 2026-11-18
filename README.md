@@ -16,25 +16,27 @@ Python and Go repos keep their native tools.
 
 ## What's inside
 
-| Path                              | What it is                                                                                                                                                                                  |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/ci-bun.yml`    | Reusable CI for Bun: install, `check` (or `lint` + `typecheck`), `build`, `test`, `test:e2e`; Node 22.18+ for the shared lint                                                               |
-| `.github/workflows/ci-python.yml` | Reusable CI for Python with uv: `uv sync`, `ruff check`, `pytest`                                                                                                                           |
-| `.github/workflows/hygiene.yml`   | Reusable checks: actionlint, zizmor, gitleaks, privacy scan of added lines                                                                                                                  |
-| `.github/workflows/self.yml`      | devkit's own CI, which runs the workflows above on devkit itself                                                                                                                            |
-| `lefthook/lefthook.yml`           | Shared pre-commit hooks: gitleaks, the privacy scan, and oxfmt and oxlint on staged files in repos on the shared standard                                                                   |
-| `scripts/init.ts`                 | `devkit init`: sets up the repo you are in, including Knip, oxfmt and oxlint for Bun                                                                                                        |
-| `scripts/oxc-staged.ts`           | The pre-commit check: oxfmt and oxlint on staged files, from each package that has the shared config                                                                                        |
-| `scripts/privacy-scan.ts`         | Finds phone numbers, home paths and your private markers; prints only `path:line`                                                                                                           |
-| `scripts/sync.ts`                 | Renders managed files and the AGENTS block into every repo; `--write` opens PRs                                                                                                             |
-| `scripts/repo-settings.ts`        | Diffs GitHub repo settings (description, topics, wiki, secret scanning, private vulnerability reporting, the `main` ruleset…) against `repos.yml`; `--apply` fixes them                     |
-| `scripts/status.ts`               | On-demand default-branch SHA, checks for that SHA and latest published stable release                                                                                                       |
-| `repos.yml`                       | The repos devkit manages, their profile, description, topics and settings                                                                                                                   |
-| `agents/AGENTS.shared.md`         | The shared block for each repo's `AGENTS.md`                                                                                                                                                |
-| `templates/`                      | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml`, `.oxfmtrc.jsonc`, `.oxlintrc.devkit.jsonc` |
-| `templates/telemetry/`            | Single-file usage telemetry clients for TypeScript, Go and Python, with no dependencies                                                                                                     |
-| `renovate/`                       | Renovate presets: `default` and `maintenance` (no majors)                                                                                                                                   |
-| `docs/standards/`                 | README, product content, paid readiness, delivery, Homebrew, agent-instruction, security, usage telemetry, and lint and format standards                                                    |
+| Path                              | What it is                                                                                                                                                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.github/workflows/ci-bun.yml`    | Reusable CI for Bun: install, `check` (or `lint` + `typecheck`), `build`, `test`, `test:e2e`; Node from `.node-version`, else 22.18+                                                                                                             |
+| `.github/workflows/ci-python.yml` | Reusable CI for Python with uv: `uv sync`, `ruff check`, `pytest`                                                                                                                                                                                |
+| `.github/workflows/hygiene.yml`   | Reusable checks: actionlint, zizmor, gitleaks, privacy scan of added lines                                                                                                                                                                       |
+| `.github/workflows/self.yml`      | devkit's own CI, which runs the workflows above on devkit itself                                                                                                                                                                                 |
+| `lefthook/lefthook.yml`           | Shared pre-commit hooks: gitleaks, the privacy scan, and oxfmt and oxlint on staged files in repos on the shared standard                                                                                                                        |
+| `lefthook/private.yml`            | Pre-commit hooks for private repos: gitleaks and the oxfmt and oxlint check, without the privacy scan; paths in `.devkit-exclude` are never read                                                                                                 |
+| `scripts/init.ts`                 | `devkit init`: sets up the repo you are in, including Knip, oxfmt and oxlint for Bun                                                                                                                                                             |
+| `scripts/oxc-staged.ts`           | The pre-commit check: oxfmt and oxlint on staged files, from each package that has the shared config                                                                                                                                             |
+| `scripts/gitleaks-staged.ts`      | gitleaks on staged changes, outside the paths listed in `.devkit-exclude`                                                                                                                                                                        |
+| `scripts/privacy-scan.ts`         | Finds phone numbers, home paths and your private markers; prints only `path:line`                                                                                                                                                                |
+| `scripts/sync.ts`                 | Renders managed files and the AGENTS block into every repo; `--write` opens PRs                                                                                                                                                                  |
+| `scripts/repo-settings.ts`        | Diffs GitHub repo settings (description, topics, wiki, secret scanning, private vulnerability reporting, the `main` ruleset…) against `repos.yml`; `--apply` fixes them                                                                          |
+| `scripts/status.ts`               | On-demand default-branch SHA, checks for that SHA and latest published stable release                                                                                                                                                            |
+| `repos.yml`                       | The repos devkit manages, their profile, description, topics and settings                                                                                                                                                                        |
+| `agents/AGENTS.shared.md`         | The shared block for each repo's `AGENTS.md`                                                                                                                                                                                                     |
+| `templates/`                      | Managed files: CI stubs, `renovate.json`, `SECURITY.md`, `CONTRIBUTING.md`, PR template, `.gitleaks.toml`, `.github/zizmor.yml`, `lefthook.yml` (public and private), `.oxfmtrc.jsonc`, `.oxlintrc.devkit.jsonc`, `.oxlintrc.devkit.react.jsonc` |
+| `templates/telemetry/`            | Single-file usage telemetry clients for TypeScript, Go and Python, with no dependencies                                                                                                                                                          |
+| `renovate/`                       | Renovate presets: `default` and `maintenance` (no majors)                                                                                                                                                                                        |
+| `docs/standards/`                 | README, docs, product content, paid readiness, delivery, Homebrew, agent-instruction, security, usage telemetry, code patterns, testing, and lint and format standards                                                                           |
 
 ## Use it in a repo
 
@@ -72,7 +74,8 @@ Existing Renovate presets and project-specific options are preserved during setu
 
 The Knip baseline reports unused files, unused `dependencies` and `devDependencies`, unlisted
 imports and unresolved imports. It leaves out unused exports and types, so a library's public
-API is never flagged.
+API is never flagged. A repo whose code has no outside callers, such as a private app or a
+workspace of internal packages, can drop `include` to run Knip's full default set.
 
 `init` keeps what the repo already has:
 
@@ -137,20 +140,25 @@ The gate needs `actions: read`: GitHub leaves a matrix leg that no runner picked
 `bun-version` (default: `.bun-version`, then `packageManager` in `package.json`), `canary`, `e2e`.
 Use `pack: true` to install and run the packed CLI. `pack-args` selects its arguments.
 See [the pack smoke test](docs/standards/pack-smoke.md). Scripts that don't exist are skipped.
+A repo that pins Node in `.node-version` or `.nvmrc` gets that Node; otherwise a repo on the
+shared lint standard gets Node 24 when the runner's is older than 22.18.
 
 Set the repository variable `CI_SELF_HOSTED` to `true` to run `main` Linux builds on
 an isolated runner with the `oss-linux` label. PRs and other branches use GitHub-hosted runners, as do repositories
 without the variable. Native macOS and Windows jobs keep their selected OS. An explicit
 non-default `hygiene.runner` also stays unchanged. Draft PRs skip work; marking them ready
-starts CI, and newer commits cancel superseded checks.
+starts CI, and newer commits cancel superseded checks. Pushes to `main` are never cancelled:
+each one keeps its run, so every pushed range gets its secret scan. The CI stubs also run
+weekly, when `hygiene` scans the full history and the build is skipped.
 
 `ci-bun` and `ci-python` point `TMPDIR` at the runner's temp dir, so test databases and other
 temp files stay out of `/tmp`; on the `oss-linux` runners that dir is tmpfs and `/tmp` is on disk.
 On `oss-linux`, `hygiene` also installs its Bun there, so it never replaces the shared
 `~/.bun/bin/bun` that a `ci-bun` job may still be running.
 
-Self-hosted Python jobs retain uv downloads in `runner.tool_cache/uv`; GitHub-hosted
-Python jobs use the Actions cache. Repo-owned jobs keep their own cache settings.
+Self-hosted Python jobs retain uv downloads in `runner.tool_cache/uv-cache`; GitHub-hosted
+Python jobs use the Actions cache. With `persistent-venv: true`, a self-hosted Python job also
+keeps its virtualenv in the tool cache between runs; `uv sync` still makes it match the lockfile. Repo-owned jobs keep their own cache settings.
 Native macOS/Windows checks, Homebrew jobs and publishing workflows can remain
 GitHub-hosted; the Linux opt-in does not move those jobs.
 
@@ -159,7 +167,8 @@ GitHub CI run unless its result is needed for the task. Required checks still ga
 merges; use auto-merge where available and report any pending checks.
 
 `ci-python.yml` inputs: `python-version` (JSON list; `""` means `.python-version`), `os`,
-`working-directory`, `ruff`, `test-command` (default `pytest -q`), `test-with` (extra packages).
+`working-directory`, `ruff`, `test-command` (default `pytest -q`), `test-with` (extra packages),
+`persistent-venv` (default off). Without a ruff of its own, a project gets ruff 0.17.5.
 
 `hygiene.yml` inputs: `actionlint`, `zizmor`, `gitleaks`, `boundary-scan` (all on), `devkit-ref`,
 `runner` (JSON label array, default `["ubuntu-latest"]`), `zizmor-path` (default `.`), and
@@ -185,12 +194,16 @@ remotes:
 
 and run `lefthook install` once per clone.
 
-Private repos can select `lefthook/secrets.yml` instead to reuse gitleaks without the public
-privacy scan. Keep repo-specific hooks alongside it. If some paths must never be read, exclude
-them in git pathspecs before piping a bounded patch to the scanner; a scanner allowlist only
-suppresses findings. For that case set `gitleaks: { skip: true }` locally and add a separately
-named bounded command; remote hook settings take precedence over local `run` overrides.
-For CI use `gitleaks-log-opts` pathspecs, `zizmor-path: .github` and `boundary-scan: false`.
+Private repos select `lefthook/private.yml` (the managed `templates/lefthook.private.yml`):
+gitleaks on staged changes and the oxfmt and oxlint check, without the public privacy scan.
+Paths that must never be read go in `.devkit-exclude` at the repo root, one git pathspec per
+line, `#` for comments. Both hooks drop them before any tool sees a file: gitleaks scans a
+temporary index without them, and the oxfmt and oxlint check never receives them. A scanner
+allowlist would only suppress findings. Repos without Bun keep `lefthook/secrets.yml`. Remote
+hook settings take precedence over local `run` overrides, so repo-specific hooks get their
+own names. For CI use `gitleaks-log-opts` pathspecs, `zizmor-path: .github` and
+`boundary-scan: false`; `hygiene` never reads `.devkit-exclude`, so the CI list stays a
+reviewed workflow input.
 
 ### Privacy scan
 
@@ -242,8 +255,13 @@ their own.
 
 Weekly on Monday morning (UTC), 3-day minimum release age, non-major updates grouped, automerge
 only for dev tooling, action digests, devkit itself and lockfile maintenance, and never for `0.x`. msw majors are held, because msw 3 does not intercept
-`fetch` under Bun 1.4.
-`renovate/maintenance` is the same without major updates.
+`fetch` under Bun 1.4. Root `overrides` and `resolutions` update with the runtime group, 0.x dev
+tools get their own PR (never automerged, so they can't hold back the dev group), and a new Node
+major or Python minor waits for approval on the Dependency Dashboard.
+`renovate/maintenance` is the same without major updates. `renovate/app` is for repos whose
+default branch deploys to production: nothing that changes the build merges itself (no
+automerge for dev tools or lockfile maintenance). A repo picks it with `renovate_preset: app` in
+`repos.yml` or a private config.
 
 ## Maintain the fleet
 
@@ -277,6 +295,10 @@ private repo, with only the desired `files` and `settings`; use `agents: false` 
 own instruction format. Public defaults are not merged into a supplied config. Do not publish
 private repo names, paths or operations in devkit. A private repo keeps its native CI, hooks and
 delivery procedure and opts into the shared pieces it needs.
+
+A private repo checks its own config without a devkit clone:
+`bunx github:neoromantic/devkit#v1 sync --config devkit.yml --check --json` (and `status`).
+That renders the released `v1` templates, the ones consumers get.
 
 `sync` and `repo-settings` print JSON arrays with per-repo status, individual changes/diffs and
 errors. `--check` returns 0 only when everything inspected is in sync, 1 for drift, unmanaged,

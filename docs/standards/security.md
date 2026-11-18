@@ -6,17 +6,35 @@ Secrets (tokens, keys, session files, `.env`), personal data (real names in fixt
 numbers, chats), local paths such as home directories, and names or details of private systems.
 Git history is public too: a leak needs a fix commit, and a leaked secret needs rotation.
 
+## Secrets in development
+
+- Secret values live in a password manager or in the hosting platform's environment settings.
+  The platform is the source of truth for deployed values.
+- `.env.example` lists every variable with an empty value. Real `.env` files are git-ignored.
+- A repo may commit a file of password-manager references, never values. With 1Password,
+  `.env.op` holds `KEY=op://<vault>/<item>/<field>` lines; prefer vault and item IDs to names
+  with spaces or non-ASCII characters. Run `op run --env-file=.env.op -- <command>`, or
+  `op inject -i .env.op -o .env.local` for a tool that needs a file; `.env.local` stays
+  git-ignored.
+- Docs may list each secret's name, what uses it and where its value lives, never the value.
+- Variables bundled into client code (`NEXT_PUBLIC_*`, `VITE_*`) hold only values meant to be
+  public.
+- Preview and demo deployments get no production secrets or real user data.
+- Never print, list or copy a secret value into a file, log, commit, issue or message. This
+  applies to agents too.
+
 ## Layers
 
-| Layer                 | Tool                                                                                       | Where                                              |
-| --------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| Before commit         | `gitleaks git --pre-commit --staged`                                                       | shared lefthook config                             |
-| Before commit         | devkit privacy scan with private markers                                                   | shared lefthook config                             |
-| Pull request and push | gitleaks on the new commits, privacy scan (generic patterns) on added lines                | `hygiene.yml`                                      |
-| Weekly / manual       | gitleaks on the full history                                                               | `hygiene.yml` on `schedule` or `workflow_dispatch` |
-| GitHub                | secret scanning and push protection                                                        | `repo-settings.ts`                                 |
-| GitHub                | `main (devkit)` ruleset: no deletion or force-push of `main`, `ci` required, admins bypass | `repo-settings.ts` (`required_checks`)             |
-| Reports               | private vulnerability reporting                                                            | `SECURITY.md`                                      |
+| Layer                 | Tool                                                                                         | Where                                              |
+| --------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Before commit         | `gitleaks git --pre-commit --staged`                                                         | shared lefthook config                             |
+| Before commit         | devkit privacy scan with private markers                                                     | shared lefthook config                             |
+| Before commit         | private repos: gitleaks and the format and lint check, never reading `.devkit-exclude` paths | `lefthook/private.yml`                             |
+| Pull request and push | gitleaks on the new commits, privacy scan (generic patterns) on added lines                  | `hygiene.yml`                                      |
+| Weekly / manual       | gitleaks on the full history                                                                 | `hygiene.yml` on `schedule` or `workflow_dispatch` |
+| GitHub                | secret scanning and push protection                                                          | `repo-settings.ts`                                 |
+| GitHub                | `main (devkit)` ruleset: no deletion or force-push of `main`, `ci` required, admins bypass   | `repo-settings.ts` (`required_checks`)             |
+| Reports               | private vulnerability reporting                                                              | `SECURITY.md`                                      |
 
 ## Privacy scan
 
@@ -48,6 +66,24 @@ internal/view/testdata/** home-path,marker
 - Shared config: `.gitleaks.toml` (managed), which extends the default rules.
 - Repo-specific false positives go in `.gitleaksignore`, one fingerprint per line, so the shared
   config stays identical everywhere. `gitleaks git --verbose` prints fingerprints.
+
+## Dependency audits
+
+Renovate keeps dependencies current. For an advisory or a toolchain upgrade:
+
+- Run the ecosystem's audit and the unused-dependency check first (for Bun: `bun audit`,
+  `bun outdated`, with `--filter '*'` in a repo with workspaces, and Knip).
+- Upgrade direct dependencies first. Add an override (`overrides` in `package.json`) only when
+  the patched transitive version satisfies the range its parent declares; never force an
+  incompatible major to make the count reach zero. Pin an override exactly and remove it once
+  the parent ships the fix.
+- Bun runs dependency install scripts only for its built-in allowlist and `trustedDependencies`.
+  Add a package there only when its script is needed and `bun pm untrusted` shows it blocked;
+  remove entries whose package no longer has one.
+- Scripts and deploy hooks run tools from the repo's pinned devDependencies. A tool that must run
+  before install is called with an exact version (`bunx tool@x.y.z`).
+- Report each finding that stays open with its dependency path and practical exposure.
+- Keep dependency, CI, behaviour and docs changes in separate commits.
 
 ## Workflows
 

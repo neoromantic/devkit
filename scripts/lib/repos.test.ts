@@ -31,6 +31,20 @@ describe("repos.yml", () => {
     }
   });
 
+  test("every file in templates/ carries the mark, including ones no public repo uses", async () => {
+    const repo = repos[0];
+    expect(repo).toBeDefined();
+    if (!repo) return;
+    const names = [...new Bun.Glob("**/*").scanSync({ cwd: TEMPLATES_DIR, dot: true })].filter(
+      (name) => !name.endsWith(".test.ts"),
+    );
+    expect(names).toContain("lefthook.private.yml");
+    for (const name of names) {
+      const out = render(await Bun.file(join(TEMPLATES_DIR, name)).text(), templateVars(repo));
+      expect(isManaged(out)).toBe(true);
+    }
+  });
+
   test("evals gets the maintenance Renovate preset", async () => {
     const evals = repos.find((r) => r.name === "evals");
     expect(evals).toBeDefined();
@@ -40,6 +54,17 @@ describe("repos.yml", () => {
       templateVars(evals),
     );
     expect(JSON.parse(out).extends).toEqual(["github>neoromantic/devkit//renovate/maintenance"]);
+  });
+
+  test("renovate_preset picks the app preset, and an unknown one is an error", async () => {
+    const evals = repos.find((r) => r.name === "evals");
+    expect(evals).toBeDefined();
+    if (!evals) return;
+    const template = await Bun.file(join(TEMPLATES_DIR, "renovate.json")).text();
+    const app = render(template, templateVars({ ...evals, renovate_preset: "app" }));
+    expect(JSON.parse(app).extends).toEqual(["github>neoromantic/devkit//renovate/app"]);
+    expect(await Bun.file(join(TEMPLATES_DIR, "..", "renovate", "app.json")).exists()).toBe(true);
+    expect(() => templateVars({ ...evals, renovate_preset: "apps" })).toThrow("renovate_preset");
   });
 
   test("devkit itself matches its own templates", async () => {

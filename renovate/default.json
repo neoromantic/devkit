@@ -19,12 +19,14 @@
   },
   "packageRules": [
     {
-      "description": "All non-major runtime updates in one PR",
+      "description": "All non-major runtime updates in one PR, with the overrides that pin runtime versions",
       "matchUpdateTypes": ["minor", "patch"],
       "matchDepTypes": [
         "dependencies",
         "peerDependencies",
         "optionalDependencies",
+        "overrides",
+        "resolutions",
         "project.dependencies",
         "require"
       ],
@@ -60,10 +62,30 @@
       "automerge": false
     },
     {
+      "description": "0.x dev tools get their own PR, so they never hold back the automerged dev group",
+      "matchCurrentVersion": "/^v?0\\./",
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchDepTypes": ["devDependencies", "dependency-groups", "tool.uv.dev-dependencies"],
+      "groupName": "dev dependencies (0.x)",
+      "groupSlug": "dev-0x"
+    },
+    {
       "description": "msw 3 does not intercept fetch under Bun 1.4, so tests that use it would reach the network: hold msw majors until it does",
       "matchPackageNames": ["msw"],
       "matchUpdateTypes": ["major"],
       "enabled": false
+    },
+    {
+      "description": "A new Node major changes CI and hosting pins: it waits for approval on the Dependency Dashboard",
+      "matchDepNames": ["node", "@types/node"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "A new Python minor changes CI and build pins: it waits for approval on the Dependency Dashboard",
+      "matchDepNames": ["python"],
+      "matchUpdateTypes": ["major", "minor"],
+      "dependencyDashboardApproval": true
     }
   ]
 }

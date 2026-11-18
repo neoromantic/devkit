@@ -14,8 +14,17 @@ export function templateVars(repo: Repo) {
     name: repo.name,
     full_name: repo.fullName,
     description: repo.description ?? "",
-    renovate_preset: repo.maintenance ? "maintenance" : "default",
+    renovate_preset: renovatePreset(repo),
   };
+}
+
+const RENOVATE_PRESETS = ["default", "maintenance", "app"];
+
+function renovatePreset(repo: Repo) {
+  const preset = repo.renovate_preset ?? (repo.maintenance ? "maintenance" : "default");
+  if (!RENOVATE_PRESETS.includes(preset))
+    throw new Error(`${repo.name}: unknown renovate_preset "${preset}"`);
+  return preset;
 }
 
 /** Replace `{{var}}` placeholders. Unknown placeholders are an error, so typos don't ship. */
