@@ -6,6 +6,7 @@ const COMMANDS: Record<string, () => Promise<{ main: (argv: string[]) => Promise
   sync: () => import('./sync'),
   'repo-settings': () => import('./repo-settings'),
   status: () => import('./status'),
+  'pack-smoke': () => import('./pack-smoke'),
 }
 
 const [command, ...rest] = process.argv.slice(2)

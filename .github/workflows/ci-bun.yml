@@ -1,7 +1,12 @@
 # Reusable CI for Bun repos.
 #
 # Runs the script contract from package.json, skipping scripts that don't exist:
-#   check (or lint + typecheck) -> build -> test -> test:e2e (when e2e: true)
+#   check (or lint + typecheck) -> build -> pack (when pack: true) -> test -> test:e2e (when e2e: true)
+#
+# pack: true checks the release artifact without publishing it: `bun pm pack`, install the tarball
+# in a clean temp project outside the checkout (fresh HOME, allowlisted environment, no job
+# secrets), then run every CLI from package.json `bin` with pack-args. Each run must exit 0.
+# See docs/standards/pack-smoke.md.
 #
 # Usage (see templates/ci.bun.yml):
 #   jobs:
@@ -34,6 +39,14 @@ on:
         description: Run the test:e2e script if it exists
         type: boolean
         default: false
+      pack:
+        description: Pack with bun pm pack, install the tarball in a clean temp project and run its bin CLIs
+        type: boolean
+        default: false
+      pack-args:
+        description: 'JSON argv, or list of argv lists, run for every packed CLI. Empty means [["--help"]]'
+        type: string
+        default: ''
 
 permissions: {}
 
@@ -109,6 +122,34 @@ jobs:
           else
             echo "no build script; skipped"
           fi
+
+      # The helper comes from the devkit revision this workflow was called at. actions/checkout
+      # only writes inside the workspace, so the helper moves to the temp dir and the checkout is
+      # removed before anything is packed. fromJSON(toJSON(job)) reads job.workflow_repository and
+      # job.workflow_sha, which actionlint 1.7.12's context table does not list yet.
+      - name: Fetch the pack helper
+        if: inputs.pack
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ fromJSON(toJSON(job)).workflow_repository }}
+          ref: ${{ fromJSON(toJSON(job)).workflow_sha }}
+          path: .devkit-pack-helper
+          sparse-checkout: scripts/pack-smoke.ts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Pack and run the installed CLI
+        if: inputs.pack
+        env:
+          DEVKIT_PACK_DIR: ${{ github.workspace }}/${{ inputs.working-directory }}
+          DEVKIT_PACK_ARGS: ${{ inputs.pack-args }}
+        run: |
+          helper="$RUNNER_TEMP/devkit-pack-smoke.ts"
+          mv "$GITHUB_WORKSPACE/.devkit-pack-helper/scripts/pack-smoke.ts" "$helper"
+          rm -rf "$GITHUB_WORKSPACE/.devkit-pack-helper"
+          # From the temp dir, so the project's bunfig.toml does not apply to the helper itself.
+          cd "$RUNNER_TEMP"
+          bun "$helper"
 
       - name: Test
         run: |
