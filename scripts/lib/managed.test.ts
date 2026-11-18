@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyAgentsBlock, isManaged, planFile, render } from "../scripts/lib/managed";
+import { applyAgentsBlock, isManaged, planFile, render } from "./managed";
 
 const BLOCK = "<!-- devkit:agents v1 -->\n## Shared rules\n- one\n<!-- /devkit:agents -->\n";
 

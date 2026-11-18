@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readlink, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Repo } from "../scripts/lib/repos";
-import { syncCheckout } from "../scripts/sync";
+import type { Repo } from "./lib/repos";
+import { syncCheckout } from "./sync";
 
 const repo: Repo = {
   name: "demo",

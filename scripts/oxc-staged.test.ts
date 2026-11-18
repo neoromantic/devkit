@@ -1,12 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { KNIP_CONFIG, OXLINT_CONFIG } from "../scripts/init";
-import { applyAgentsBlock, render, templateVars } from "../scripts/lib/managed";
-import { AGENTS_BLOCK_PATH, ROOT, type Repo, TEMPLATES_DIR } from "../scripts/lib/repos";
-import { main as oxcStaged } from "../scripts/oxc-staged";
-import { withPack } from "../scripts/sync";
+import { INIT_FILES, KNIP_CONFIG, OXLINT_CONFIG } from "./init";
+import { applyAgentsBlock, render, templateVars } from "./lib/managed";
+import {
+  AGENTS_BLOCK_PATH,
+  loadReposFile,
+  resolveRepos,
+  ROOT,
+  type Repo,
+  TEMPLATES_DIR,
+} from "./lib/repos";
+import { main as oxcStaged } from "./oxc-staged";
+import { withPack } from "./sync";
 
 const OXFMT = join(ROOT, "node_modules", ".bin", "oxfmt");
 
@@ -44,11 +51,11 @@ function oxfmtCheck(dir: string) {
 describe("managed files come out formatted", () => {
   test("every rendered template, the CI stub with pack and the init configs pass oxfmt", () =>
     withDir(async (dir) => {
-      const names = (await readdir(TEMPLATES_DIR, { recursive: true })).filter((n) =>
-        /\.[a-z]+$/.test(n),
-      );
+      const names = new Set([
+        ...resolveRepos(await loadReposFile()).flatMap((r) => Object.values(r.files)),
+        ...Object.values(INIT_FILES).flatMap((files) => Object.values(files)),
+      ]);
       for (const name of names) {
-        if (!(await Bun.file(join(TEMPLATES_DIR, name)).exists())) continue;
         await mkdir(dirname(join(dir, name)), { recursive: true });
         await Bun.write(join(dir, name), await template(name));
       }

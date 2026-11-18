@@ -11,10 +11,10 @@ import {
   OXLINT_CONFIG,
   planKnip,
   planOxc,
-} from "../scripts/init";
-import { render, templateVars } from "../scripts/lib/managed";
-import { loadReposFile, type Repo, ROOT, TEMPLATES_DIR } from "../scripts/lib/repos";
-import { syncCheckout, withPack } from "../scripts/sync";
+} from "./init";
+import { render, templateVars } from "./lib/managed";
+import { loadReposFile, type Repo, ROOT, TEMPLATES_DIR } from "./lib/repos";
+import { syncCheckout, withPack } from "./sync";
 
 const OWN = (await Bun.file(join(ROOT, "package.json")).json()).devDependencies as Record<
   string,

@@ -37,7 +37,7 @@ describe.skipIf(!go)("telemetry.go with the Go toolchain", () => {
     dir = await mkdtemp(join(tmpdir(), "devkit-telemetry-go-"));
     await copyFile(template, join(dir, "telemetry.go"));
     for (const name of ["go.mod", "telemetry_test.go"]) {
-      await copyFile(join(root, "tests/telemetry/go", name), join(dir, name));
+      await copyFile(join(root, "test/telemetry/go", name), join(dir, name));
     }
   });
   afterAll(() => rm(dir, { recursive: true, force: true }));

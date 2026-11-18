@@ -21,7 +21,7 @@ import {
   type Telemetry,
   type TelemetryOptions,
   type TelemetryStorage,
-} from "../templates/telemetry/telemetry";
+} from "./telemetry";
 
 const ID = "8b0e6c1a-3f0d-4a51-9a7e-2f1c5d9e4b77";
 const KEY = "phc_np7sxHvzFH1HDTlQdMaqRDrpOVZ0xytnSDxyCMBwNO9"; // the public, write-only key. gitleaks:allow

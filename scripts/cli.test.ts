@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { ROOT, type Repo } from "../scripts/lib/repos";
-import { syncCheckout } from "../scripts/sync";
+import { ROOT, type Repo } from "./lib/repos";
+import { syncCheckout } from "./sync";
 
 const dir = await mkdtemp(join(tmpdir(), "devkit-commands-"));
 const source = join(dir, "source");

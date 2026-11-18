@@ -1,13 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { isManaged, render, templateVars } from "../scripts/lib/managed";
-import {
-  AGENTS_BLOCK_PATH,
-  isFrozen,
-  loadReposFile,
-  resolveRepos,
-  TEMPLATES_DIR,
-} from "../scripts/lib/repos";
+import { isManaged, render, templateVars } from "./managed";
+import { AGENTS_BLOCK_PATH, isFrozen, loadReposFile, resolveRepos, TEMPLATES_DIR } from "./repos";
 import {
   applyPlan,
   desiredRuleset,
@@ -20,7 +14,7 @@ import {
   type RepoState,
   rulesetFromApi,
   stateFromApi,
-} from "../scripts/repo-settings";
+} from "../repo-settings";
 
 const repos = resolveRepos(await loadReposFile());
 

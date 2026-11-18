@@ -19,7 +19,8 @@
     ".lefthook",
     "renovate",
     "templates",
-    "agents"
+    "agents",
+    "!**/*.test.ts"
   ],
   "type": "module",
   "scripts": {

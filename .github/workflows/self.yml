@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: read
     with:
-      working-directory: tests/fixtures/python
+      working-directory: test/fixtures/python
       python-version: '["3.11","3.12"]'
 
   hygiene:

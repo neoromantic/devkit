@@ -1,6 +1,6 @@
 """Tests for templates/telemetry/telemetry.py.
 
-Run from the repo root: python3 -m unittest discover -s tests/telemetry/python
+Run from the repo root: python3 -m unittest discover -s test/telemetry/python
 
 Every test runs with a cleared environment, a temp HOME and state directory, no
 terminal, and a local HTTP server as the endpoint. Nothing touches the real home

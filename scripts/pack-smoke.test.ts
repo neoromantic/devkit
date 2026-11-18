@@ -2,8 +2,8 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ROOT } from "../scripts/lib/repos";
-import { binsOf, cleanEnv, parseArgs } from "../scripts/pack-smoke";
+import { ROOT } from "./lib/repos";
+import { binsOf, cleanEnv, parseArgs } from "./pack-smoke";
 
 const SCRIPT = join(ROOT, "scripts", "pack-smoke.ts");
 const dir = mkdtempSync(join(tmpdir(), "devkit-pack-test-"));

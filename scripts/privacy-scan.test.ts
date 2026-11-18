@@ -14,7 +14,7 @@ import {
   rulesFor,
   scanLine,
   scanText,
-} from "../scripts/privacy-scan";
+} from "./privacy-scan";
 
 // Built at runtime so this file doesn't trip the scanner itself.
 const PHONE = ["+44", "7700", "9124", "86"].join(" ");
@@ -153,15 +153,12 @@ describe("cli", () => {
       ...process.env,
       DEVKIT_PRIVATE_MARKERS: markers ?? join(cwd, "none"),
     };
-    const proc = Bun.spawn(
-      ["bun", join(import.meta.dir, "..", "scripts", "privacy-scan.ts"), ...args],
-      {
-        cwd,
-        env,
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
+    const proc = Bun.spawn(["bun", join(import.meta.dir, "privacy-scan.ts"), ...args], {
+      cwd,
+      env,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     const [stdout, stderr, code] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),

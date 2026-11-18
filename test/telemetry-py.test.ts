@@ -22,7 +22,7 @@ test.skipIf(!python)(
   () => {
     // A clean environment: the suite sets its own HOME, state dir and endpoint.
     const run = Bun.spawnSync(
-      [python ?? "python3", "-B", "-m", "unittest", "discover", "-s", "tests/telemetry/python"],
+      [python ?? "python3", "-B", "-m", "unittest", "discover", "-s", "test/telemetry/python"],
       { cwd: root, env: { PATH: process.env.PATH ?? "" }, stdout: "pipe", stderr: "pipe" },
     );
     const output = run.stderr.toString();
