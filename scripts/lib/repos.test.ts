@@ -56,6 +56,17 @@ describe("repos.yml", () => {
     expect(JSON.parse(out).extends).toEqual(["github>neoromantic/devkit//renovate/maintenance"]);
   });
 
+  test("renovate_preset picks the app preset, and an unknown one is an error", async () => {
+    const evals = repos.find((r) => r.name === "evals");
+    expect(evals).toBeDefined();
+    if (!evals) return;
+    const template = await Bun.file(join(TEMPLATES_DIR, "renovate.json")).text();
+    const app = render(template, templateVars({ ...evals, renovate_preset: "app" }));
+    expect(JSON.parse(app).extends).toEqual(["github>neoromantic/devkit//renovate/app"]);
+    expect(await Bun.file(join(TEMPLATES_DIR, "..", "renovate", "app.json")).exists()).toBe(true);
+    expect(() => templateVars({ ...evals, renovate_preset: "apps" })).toThrow("renovate_preset");
+  });
+
   test("devkit itself matches its own templates", async () => {
     const devkit = repos.find((r) => r.name === "devkit");
     expect(devkit).toBeDefined();

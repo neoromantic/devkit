@@ -19,6 +19,8 @@ export interface RepoEntry {
   homepage?: string;
   topics?: string[];
   maintenance?: boolean;
+  /** Renovate preset for renovate.json: `default`, `maintenance` or `app`. Defaults from `maintenance`. */
+  renovate_preset?: string;
   frozen?: boolean;
   frozen_until?: string;
   agents?: boolean;

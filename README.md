@@ -74,7 +74,8 @@ Existing Renovate presets and project-specific options are preserved during setu
 
 The Knip baseline reports unused files, unused `dependencies` and `devDependencies`, unlisted
 imports and unresolved imports. It leaves out unused exports and types, so a library's public
-API is never flagged.
+API is never flagged. A repo whose code has no outside callers, such as a private app or a
+workspace of internal packages, can drop `include` to run Knip's full default set.
 
 `init` keeps what the repo already has:
 
@@ -254,8 +255,13 @@ their own.
 
 Weekly on Monday morning (UTC), 3-day minimum release age, non-major updates grouped, automerge
 only for dev tooling, action digests, devkit itself and lockfile maintenance, and never for `0.x`. msw majors are held, because msw 3 does not intercept
-`fetch` under Bun 1.4.
-`renovate/maintenance` is the same without major updates.
+`fetch` under Bun 1.4. Root `overrides` and `resolutions` update with the runtime group, 0.x dev
+tools get their own PR (never automerged, so they can't hold back the dev group), and a new Node
+major or Python minor waits for approval on the Dependency Dashboard.
+`renovate/maintenance` is the same without major updates. `renovate/app` is for repos whose
+default branch deploys to production: nothing that changes the build merges itself (no
+automerge for dev tools or lockfile maintenance). A repo picks it with `renovate_preset: app` in
+`repos.yml` or a private config.
 
 ## Maintain the fleet
 

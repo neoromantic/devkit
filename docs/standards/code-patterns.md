@@ -32,5 +32,8 @@ For repos with several packages:
   without a build. A `"./*": "./src/*.ts"` wildcard fails `landmines-structure/package-exports`;
   a wildcard over one folder of public modules (`"./*": "./src/components/*.tsx"`) passes.
 - Apps depend on packages, never the reverse. A package needs a second caller.
+- A shared package lists the framework it builds on only in `peerDependencies`; Bun installs and
+  links peers. A duplicate `devDependency` would put that framework in Renovate's automerged dev
+  group, apart from the apps that run it.
 - Lint and format run once from the root, over every workspace. Type checks, tests and builds
   may run per workspace through the task runner.

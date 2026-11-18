@@ -72,11 +72,16 @@ internal/view/testdata/** home-path,marker
 Renovate keeps dependencies current. For an advisory or a toolchain upgrade:
 
 - Run the ecosystem's audit and the unused-dependency check first (for Bun: `bun audit`,
-  `bun outdated` and Knip).
+  `bun outdated`, with `--filter '*'` in a repo with workspaces, and Knip).
 - Upgrade direct dependencies first. Add an override (`overrides` in `package.json`) only when
   the patched transitive version satisfies the range its parent declares; never force an
   incompatible major to make the count reach zero. Pin an override exactly and remove it once
   the parent ships the fix.
+- Bun runs dependency install scripts only for its built-in allowlist and `trustedDependencies`.
+  Add a package there only when its script is needed and `bun pm untrusted` shows it blocked;
+  remove entries whose package no longer has one.
+- Scripts and deploy hooks run tools from the repo's pinned devDependencies. A tool that must run
+  before install is called with an exact version (`bunx tool@x.y.z`).
 - Report each finding that stays open with its dependency path and practical exposure.
 - Keep dependency, CI, behaviour and docs changes in separate commits.
 
