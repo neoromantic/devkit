@@ -2,12 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { init, INIT_FILES, KNIP_CONFIG, KNIP_INCLUDE, planKnip } from '../scripts/init'
+import { init, INIT_FILES, KNIP_CONFIG, KNIP_INCLUDE, OXC_PACKAGES, OXLINT_CONFIG, planKnip, planOxc } from '../scripts/init'
 import { render, templateVars } from '../scripts/lib/managed'
 import { loadReposFile, type Repo, ROOT, TEMPLATES_DIR } from '../scripts/lib/repos'
 import { syncCheckout, withPack } from '../scripts/sync'
 
-const KNIP = (await Bun.file(join(ROOT, 'package.json')).json()).devDependencies.knip as string
+const OWN = (await Bun.file(join(ROOT, 'package.json')).json()).devDependencies as Record<string, string>
+const KNIP = OWN.knip as string
+const TOOLS = Object.fromEntries(['knip', ...OXC_PACKAGES].map((name) => [name, OWN[name] as string]))
 const KNIP_BIN = join(ROOT, 'node_modules', '.bin', 'knip')
 
 async function withDir(fn: (dir: string) => Promise<void>) {
@@ -30,7 +32,7 @@ async function gitRepo(dir: string, remote = 'https://github.com/someone/demo.gi
 
 /** Stands in for the bun.lock that `bun install` writes, so repeat runs stay offline. */
 async function fakeLock(dir: string) {
-  await Bun.write(join(dir, 'bun.lock'), `{ "workspaces": { "": { "devDependencies": { "knip": "${KNIP}" } } } }\n`)
+  await Bun.write(join(dir, 'bun.lock'), `${JSON.stringify({ workspaces: { '': { devDependencies: TOOLS } } })}\n`)
 }
 
 async function writeJson(path: string, value: unknown) {
@@ -86,19 +88,31 @@ describe('init: fresh Bun project', () => {
         'create .github/workflows/ci.yml',
         'create CONTRIBUTING.md',
         'create .github/PULL_REQUEST_TEMPLATE.md',
+        'create .oxfmtrc.jsonc',
+        'create .oxlintrc.devkit.jsonc',
         'create AGENTS.md',
         'create CLAUDE.md',
         'update package.json',
         'create knip.json',
+        'create .oxlintrc.json',
       ])
       expect(actions(dry)).toEqual([...actions(run), 'create bun.lock'])
       expect(run.notes.join('\n')).toContain('Run `bun install`')
       // What bun install writes, enough for the offline repeat below.
       await fakeLock(dir)
       const pkg = await Bun.file(join(dir, 'package.json')).json()
-      expect(pkg.devDependencies).toEqual({ knip: KNIP })
-      expect(pkg.scripts).toEqual({ 'check:knip': 'knip', check: 'bun run check:knip' })
+      expect(pkg.devDependencies).toEqual(TOOLS)
+      expect(Object.keys(pkg.devDependencies)).toEqual(Object.keys(TOOLS).sort())
+      expect(pkg.scripts).toEqual({
+        format: 'oxfmt',
+        'format:check': 'oxfmt --check',
+        lint: 'oxlint --deny-warnings',
+        'check:knip': 'knip',
+        check: 'bun run format:check && bun run lint && bun run check:knip',
+      })
       expect(await Bun.file(join(dir, 'knip.json')).text()).toBe(KNIP_CONFIG)
+      expect(await Bun.file(join(dir, '.oxlintrc.json')).text()).toBe(OXLINT_CONFIG)
+      expect(run.notes.join('\n')).toContain('Run `bun run format` once')
       const ci = await Bun.file(join(dir, '.github/workflows/ci.yml')).text()
       expect(ci).toBe(render(await Bun.file(join(TEMPLATES_DIR, 'ci.bun.yml')).text(), templateVars(syncRepo('bun'))))
       expect(ci).not.toContain('pack:')
@@ -128,7 +142,9 @@ describe('init: fresh Bun project', () => {
       const agents = await Bun.file(join(dir, 'AGENTS.md')).text()
       expect(agents.startsWith('# demo\n\n<!-- devkit:agents v1 -->')).toBe(true)
       expect(agents.endsWith('<!-- /devkit:agents -->\n\n## Project\n\nDefault to using Bun.\n\n## APIs\n\n- Use Bun.file.\n')).toBe(true)
-      expect((await Bun.file(join(dir, 'package.json')).json()).scripts.check).toBe('bun run typecheck && bun run check:knip')
+      expect((await Bun.file(join(dir, 'package.json')).json()).scripts.check).toBe(
+        'bun run format:check && bun run lint && bun run typecheck && bun run check:knip',
+      )
       await fakeLock(dir)
       expect((await init({ dir, dryRun: true })).changes.every((c) => c.action === 'ok')).toBe(true)
     }))
@@ -243,8 +259,16 @@ describe('init: existing project', () => {
       const text = await Bun.file(join(dir, 'package.json')).text()
       expect(text.startsWith('{\n\t"name"')).toBe(true)
       const out = JSON.parse(text)
-      expect(out.devDependencies).toEqual(pkg.devDependencies)
-      expect(out.scripts).toEqual({ ...pkg.scripts, 'check:knip': 'knip', check: 'bun run lint && bun run typecheck && bun run check:knip' })
+      const { knip: _, ...oxc } = TOOLS
+      expect(out.devDependencies).toEqual({ ...pkg.devDependencies, ...oxc })
+      expect(out.scripts).toEqual({
+        ...pkg.scripts,
+        format: 'oxfmt',
+        'format:check': 'oxfmt --check',
+        'check:knip': 'knip',
+        check: 'bun run format:check && bun run lint && bun run typecheck && bun run check:knip',
+      })
+      await writeJson(join(dir, 'bun.lock'), { workspaces: { '': { devDependencies: out.devDependencies } } })
 
       const agents = await Bun.file(join(dir, 'AGENTS.md')).text()
       expect(agents).toContain('<!-- devkit:agents v1 -->')
@@ -252,6 +276,7 @@ describe('init: existing project', () => {
       const notes = run.notes.join('\n')
       expect(notes).toContain('Run `bun run check` in it')
       expect(notes).toContain('uses: neoromantic/devkit/.github/workflows/ci-bun.yml@v1')
+      expect(notes).toContain('`lint` runs `eslint .`: switch it to `oxlint --deny-warnings`.')
 
       expect((await init({ dir, dryRun: true })).changes.every((c) => c.action === 'ok' || c.action === 'skip')).toBe(true)
     }))
@@ -304,6 +329,33 @@ describe('planKnip', () => {
     })
     const done = { scripts: { check: 'tsc && knip' }, devDependencies: { knip: '1.0.0' } }
     expect(planKnip(done, '2.0.0')).toEqual({ pkg: done, notes: [] })
+  })
+})
+
+describe('planOxc', () => {
+  const versions = { oxlint: '1.0.0', oxfmt: '0.1.0', '@interfere/landmines': '0.1.0' }
+
+  test('puts the format check and lint first in an existing check', () => {
+    const plan = planOxc({ scripts: { check: 'tsc && bun run check:knip' } }, versions)
+    expect(plan.pkg.scripts?.check).toBe('bun run format:check && bun run lint && tsc && bun run check:knip')
+    expect(plan.advice).toEqual([])
+  })
+
+  test('keeps scripts that use other tools, advises a switch and leaves them out of check', () => {
+    const plan = planOxc({ scripts: { lint: 'biome check .', format: 'biome format --write .', check: 'tsc' } }, versions)
+    expect(plan.pkg.scripts).toEqual({ lint: 'biome check .', format: 'biome format --write .', check: 'tsc' })
+    expect(plan.advice).toEqual([
+      '`format` runs `biome format --write .`: switch it to `oxfmt`.',
+      '`lint` runs `biome check .`: switch it to `oxlint --deny-warnings`.',
+    ])
+  })
+
+  test('changes nothing once the standard is in place', () => {
+    const done = {
+      scripts: { format: 'oxfmt', 'format:check': 'oxfmt --check', lint: 'oxlint --deny-warnings', check: 'bun run format:check && bun run lint' },
+      devDependencies: { ...versions },
+    }
+    expect(planOxc(done, { oxlint: '2.0.0', oxfmt: '0.2.0', '@interfere/landmines': '0.2.0' })).toEqual({ pkg: done, notes: [], advice: [] })
   })
 })
 

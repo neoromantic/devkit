@@ -9,8 +9,10 @@
  * and git remote: no repos.yml lookup and no GitHub API calls. Writes the same managed files and
  * AGENTS block as sync, so a later sync keeps them. Bun projects also get Knip: a pinned
  * devDependency, a knip.json baseline, a `check:knip` script wired into `check`, and bun.lock
- * from `bun install`. Existing CI, hooks, Knip settings and unmanaged files are kept. JS projects
- * on npm, pnpm or yarn are refused before anything is written.
+ * from `bun install`. They also get the shared lint and format standard: oxlint, oxfmt and
+ * landmines pinned, `format`, `format:check` and `lint` scripts run by `check`, and a `.oxlintrc.json`
+ * that extends the managed `.oxlintrc.devkit.jsonc`. Existing CI, hooks, Knip settings, scripts and
+ * unmanaged files are kept. JS projects on npm, pnpm or yarn are refused before anything is written.
  */
 import { lstat, readdir } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
@@ -36,6 +38,8 @@ export const INIT_FILES: Record<Profile, Record<string, string>> = {
     '.github/workflows/ci.yml': 'ci.bun.yml',
     'CONTRIBUTING.md': 'CONTRIBUTING.md',
     '.github/PULL_REQUEST_TEMPLATE.md': 'PULL_REQUEST_TEMPLATE.md',
+    '.oxfmtrc.jsonc': '.oxfmtrc.jsonc',
+    '.oxlintrc.devkit.jsonc': '.oxlintrc.devkit.jsonc',
   },
   python: {
     ...COMMON_FILES,
@@ -79,11 +83,25 @@ const EQUIVALENTS: Record<string, string[]> = {
 /** The baseline issue types: unused files and dependencies, unlisted and unresolved imports. */
 export const KNIP_INCLUDE = ['files', 'dependencies', 'devDependencies', 'unlisted', 'unresolved']
 
-export const KNIP_CONFIG = `${JSON.stringify(
-  { $schema: 'https://unpkg.com/knip@6/schema.json', include: KNIP_INCLUDE },
-  null,
-  2,
-)}\n`
+export const KNIP_CONFIG = `{\n  "$schema": "https://unpkg.com/knip@6/schema.json",\n  "include": ${JSON.stringify(KNIP_INCLUDE).replaceAll(',', ', ')}\n}\n`
+
+/** The lint and format standard's packages, pinned to the versions devkit tests with. */
+export const OXC_PACKAGES = ['@interfere/landmines', 'oxfmt', 'oxlint']
+
+export const OXC_SCRIPTS: Record<string, string> = {
+  format: 'oxfmt',
+  'format:check': 'oxfmt --check',
+  lint: 'oxlint --deny-warnings',
+}
+
+/** The repo's own oxlint config: the shared standard plus this repo's exceptions. */
+export const OXLINT_CONFIG =
+  '{\n  "$schema": "./node_modules/oxlint/configuration_schema.json",\n  "extends": ["./.oxlintrc.devkit.jsonc"]\n}\n'
+
+const OXLINT_CONFIG_FILE = /^(\.oxlintrc\.jsonc?|oxlint\.config\.(ts|mts|cts|js|mjs|cjs))$/
+
+/** Linters and formatters that oxlint and oxfmt replace. init reports them and removes nothing. */
+const OTHER_TOOLS = /^(biome\.jsonc?|\.eslintrc(\.\w+)?|eslint\.config\.\w+|\.prettierrc(\.\w+)?|prettier\.config\.\w+|dprint\.jsonc?|\.dprint\.jsonc?)$/
 
 /** A workflow that already is CI: named like one, calls the shared jobs, or runs checks or tests. */
 const CI_NAME = /^(ci|tests?|checks?|build|lint)\.ya?ml$/i
@@ -135,6 +153,59 @@ export function planKnip(pkg: PackageJson, knipVersion: string): { pkg: PackageJ
   }
   out.scripts = scripts
   return { pkg: out, notes }
+}
+
+/**
+ * Add the lint and format standard to a package.json: pinned devDependencies, the `format`,
+ * `format:check` and `lint` scripts, and `check` running the format check and lint first.
+ * Existing scripts that use other tools stay and get a note. Returns the new object and notes.
+ */
+export function planOxc(
+  pkg: PackageJson,
+  versions: Record<string, string>,
+): { pkg: PackageJson; notes: string[]; advice: string[] } {
+  const out: PackageJson = structuredClone(pkg)
+  const notes: string[] = []
+  const advice: string[] = []
+  const missing = OXC_PACKAGES.filter((name) => !out.dependencies?.[name] && !out.devDependencies?.[name])
+  if (missing.length) {
+    const dev = { ...(out.devDependencies ?? {}) }
+    for (const name of missing) {
+      const version = versions[name]
+      if (!version) throw new Error(`devkit package.json has no ${name} devDependency`)
+      dev[name] = version
+      notes.push(`devDependencies.${name} ${version}`)
+    }
+    out.devDependencies = Object.fromEntries(Object.entries(dev).sort(([a], [b]) => a.localeCompare(b)))
+  }
+  const scripts = { ...(out.scripts ?? {}) }
+  if (!scripts.format) {
+    scripts.format = OXC_SCRIPTS.format as string
+    notes.push('scripts.format')
+  } else if (!/\boxfmt\b/.test(scripts.format)) advice.push(`\`format\` runs \`${scripts.format}\`: switch it to \`oxfmt\`.`)
+  if (!scripts['format:check'] && /\boxfmt\b/.test(scripts.format ?? '')) {
+    scripts['format:check'] = OXC_SCRIPTS['format:check'] as string
+    notes.push('scripts.format:check')
+  }
+  if (!scripts.lint) {
+    scripts.lint = OXC_SCRIPTS.lint as string
+    notes.push('scripts.lint')
+  } else if (!/\boxlint\b/.test(scripts.lint)) {
+    advice.push(`\`lint\` runs \`${scripts.lint}\`: switch it to \`oxlint --deny-warnings\`.`)
+  }
+  const check = scripts.check ?? ''
+  const first: string[] = []
+  if (/\boxfmt\b/.test(scripts['format:check'] ?? '') && !/format:check|\boxfmt\b/.test(check)) first.push('bun run format:check')
+  if (/\boxlint\b/.test(scripts.lint) && !/\bbun run lint\b|\boxlint\b/.test(check)) first.push('bun run lint')
+  if (first.length) {
+    const rest = scripts.check
+      ? [scripts.check]
+      : ['lint', 'typecheck'].filter((s) => scripts[s] && !first.includes(`bun run ${s}`)).map((s) => `bun run ${s}`)
+    scripts.check = [...first, ...rest].join(' && ')
+    notes.push(`scripts.check runs ${first.map((s) => s.slice('bun run '.length)).join(' and ')}`)
+  }
+  out.scripts = scripts
+  return { pkg: out, notes, advice }
 }
 
 /** `owner/name` from a GitHub URL, `github:owner/name` or `owner/name`. */
@@ -313,9 +384,13 @@ export async function init(opts: InitOptions): Promise<InitResult> {
   }
 
   if (profile === 'bun' && pkgText) {
-    const knipVersion = ((await Bun.file(join(ROOT, 'package.json')).json()) as PackageJson).devDependencies?.knip
+    const own = ((await Bun.file(join(ROOT, 'package.json')).json()) as PackageJson).devDependencies ?? {}
+    const knipVersion = own.knip
     if (!knipVersion) throw new Error('devkit package.json has no knip devDependency')
-    const plan = planKnip(pkg, knipVersion)
+    const oxc = planOxc(pkg, own)
+    const knip = planKnip(oxc.pkg, knipVersion)
+    const plan = { pkg: knip.pkg, notes: [...oxc.notes, ...knip.notes] }
+    notes.push(...oxc.advice)
     if (plan.notes.length) {
       changes.push({ path: 'package.json', action: 'update', note: plan.notes.join(', ') })
       if (write) {
@@ -332,12 +407,29 @@ export async function init(opts: InitOptions): Promise<InitResult> {
       if (write) await Bun.write(join(dir, 'knip.json'), KNIP_CONFIG)
     }
 
-    // A transitive Knip entry does not lock the root project’s direct dependency.
+    const oxlintConfigs = [...names].filter((n) => OXLINT_CONFIG_FILE.test(n))
+    if (!oxlintConfigs.length) {
+      changes.push({ path: '.oxlintrc.json', action: 'create', note: 'extends .oxlintrc.devkit.jsonc' })
+      if (write) await Bun.write(join(dir, '.oxlintrc.json'), OXLINT_CONFIG)
+    } else {
+      const text = (await readText(join(dir, oxlintConfigs[0] as string))) ?? ''
+      const extended = text.includes('.oxlintrc.devkit.jsonc')
+      changes.push({ path: oxlintConfigs.join(', '), action: 'ok', note: 'existing oxlint config kept' })
+      if (!extended) notes.push(`${oxlintConfigs[0]} does not extend ./.oxlintrc.devkit.jsonc: add it to \`extends\`.`)
+    }
+    const others = [...names].filter((n) => OTHER_TOOLS.test(n))
+    if (others.length) notes.push(`Found ${others.join(', ')}: oxlint and oxfmt replace it. Remove it and its dependencies.`)
+
+    // A transitive entry does not lock the root project’s direct dependency.
     const lock = await readText(join(dir, 'bun.lock'))
     const locked = lock === null ? undefined : Bun.JSONC.parse(lock) as { workspaces?: Record<string, PackageJson> }
     const root = locked?.workspaces?.['']
-    const expected = plan.pkg.devDependencies?.knip ?? plan.pkg.dependencies?.knip
-    if ((root?.devDependencies?.knip ?? root?.dependencies?.knip) !== expected) {
+    const stale = ['knip', ...OXC_PACKAGES].some(
+      (name) =>
+        (root?.devDependencies?.[name] ?? root?.dependencies?.[name]) !==
+        (plan.pkg.devDependencies?.[name] ?? plan.pkg.dependencies?.[name]),
+    )
+    if (stale) {
       const action = lock === null ? 'create' : 'update'
       if (!write) changes.push({ path: 'bun.lock', action, note: 'bun install' })
       else if (opts.install === false) notes.push('Run `bun install` to update bun.lock.')
@@ -352,7 +444,13 @@ export async function init(opts: InitOptions): Promise<InitResult> {
   }
 
   if (files['lefthook.yml']) notes.push('Run `lefthook install` once per clone (needs lefthook and gitleaks).')
-  if (profile === 'bun') notes.push('Run `bun run check`: it includes Knip.')
+  if (profile === 'bun') {
+    notes.push(
+      'Run `bun run format` once and commit the result on its own, then fix what `bun run lint` reports. ' +
+        'Exceptions go in .oxlintrc.json: https://github.com/neoromantic/devkit/blob/main/docs/standards/lint-format.md',
+    )
+    notes.push('Run `bun run check`: it runs the format check, lint and Knip.')
+  }
   if (!write && changes.some((c) => c.action === 'create' || c.action === 'update' || c.action === 'adopt')) {
     notes.push('Dry run: nothing was written. Run again without --dry-run.')
   }
