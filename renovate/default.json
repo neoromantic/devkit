@@ -58,6 +58,12 @@
       "description": "0.x packages can break in a minor: never automerge them",
       "matchCurrentVersion": "/^v?0\\./",
       "automerge": false
+    },
+    {
+      "description": "msw 3 does not intercept fetch under Bun 1.4, so tests that use it would reach the network: hold msw majors until it does",
+      "matchPackageNames": ["msw"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
     }
   ]
 }
