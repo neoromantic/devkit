@@ -1,10 +1,12 @@
 #!/usr/bin/env bun
 /** devkit <command>: entry point for `bunx github:neoromantic/devkit#v1 <command>`. */
 const COMMANDS: Record<string, () => Promise<{ main: (argv: string[]) => Promise<number> }>> = {
+  init: () => import('./init'),
   'privacy-scan': () => import('./privacy-scan'),
   sync: () => import('./sync'),
   'repo-settings': () => import('./repo-settings'),
   status: () => import('./status'),
+  'pack-smoke': () => import('./pack-smoke'),
 }
 
 const [command, ...rest] = process.argv.slice(2)

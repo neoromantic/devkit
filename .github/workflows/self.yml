@@ -24,6 +24,8 @@ jobs:
     with:
       os: '["ubuntu-latest","macos-latest"]'
       e2e: true
+      pack: true
+      pack-args: '[["--help"],["status","--help"]]'
 
   python-fixture:
     uses: ./.github/workflows/ci-python.yml # zizmor: ignore[self-repository] actionlint 1.7.12 rejects the $/ form
@@ -37,6 +39,29 @@ jobs:
     uses: ./.github/workflows/hygiene.yml # zizmor: ignore[self-repository] actionlint 1.7.12 rejects the $/ form
     permissions:
       contents: read
+
+  # The pack helper on Windows, against devkit itself. The full suite runs on Linux and macOS only.
+  pack-windows:
+    if: github.event.pull_request.draft != true
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+          no-cache: true
+      - name: Pack and run the installed CLI
+        env:
+          DEVKIT_PACK_ARGS: '[["--help"],["status","--help"]]'
+        run: bun scripts/pack-smoke.ts .
 
   templates:
     if: github.event.pull_request.draft != true
@@ -71,7 +96,7 @@ jobs:
 
   # The one required check for the branch ruleset.
   ci:
-    needs: [bun, python-fixture, hygiene, templates]
+    needs: [bun, python-fixture, hygiene, pack-windows, templates]
     if: always() && github.event.pull_request.draft != true
     runs-on: ${{ fromJSON('{"true":"oss-linux","false":"ubuntu-latest"}')[format('{0}', vars.CI_SELF_HOSTED == 'true' && github.ref == 'refs/heads/main')] }}
     permissions: {}

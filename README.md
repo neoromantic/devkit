@@ -20,6 +20,7 @@ and nothing here reformats a repo.
 | `.github/workflows/hygiene.yml` | Reusable checks: actionlint, zizmor, gitleaks, privacy scan of added lines |
 | `.github/workflows/self.yml` | devkit's own CI, which runs the workflows above on devkit itself |
 | `lefthook/lefthook.yml` | Shared pre-commit hooks: gitleaks and the privacy scan |
+| `scripts/init.ts` | `devkit init`: sets up the repo you are in, including Knip for Bun |
 | `scripts/privacy-scan.ts` | Finds phone numbers, home paths and your private markers; prints only `path:line` |
 | `scripts/sync.ts` | Renders managed files and the AGENTS block into every repo; `--write` opens PRs |
 | `scripts/repo-settings.ts` | Diffs GitHub repo settings (description, topics, wiki, secret scanning, private vulnerability reporting, the `main` ruleset…) against `repos.yml`; `--apply` fixes them |
@@ -32,6 +33,65 @@ and nothing here reformats a repo.
 | `docs/standards/` | README, product content, paid readiness, delivery, Homebrew, agent-instruction, security and usage telemetry standards |
 
 ## Use it in a repo
+
+### Start with `devkit init`
+
+Run it in the root of a Bun or Python repo, new or existing:
+
+```sh
+bunx github:neoromantic/devkit#v1 init        # writes; --dry-run only reports
+bunx github:neoromantic/devkit#v1 init --dry-run --json
+```
+
+It also works from a clone (`bun scripts/cli.ts init --dir ../my-repo`) or from the installed
+package (`bun add -d github:neoromantic/devkit#v1`, then `bunx devkit init`).
+
+`init` reads only the repo itself: `package.json` or `pyproject.toml`, the lockfiles and the
+`origin` remote. It never reads `repos.yml` and makes no GitHub API calls. It writes:
+
+- the same managed files and `AGENTS.md` block as `sync` for the `bun` or `python` profile, so
+  a later `sync` finds nothing to change;
+- for Bun: `knip` pinned as a devDependency (the version devkit tests with), a `knip.json`
+  baseline, a `check:knip` script, and `check` running it, so `ci-bun` runs Knip through
+  `check`. Then `bun install` updates `bun.lock` for `bun install --frozen-lockfile`.
+
+The Knip baseline reports unused files, unused `dependencies` and `devDependencies`, unlisted
+imports and unresolved imports. It leaves out unused exports and types, so a library's public
+API is never flagged.
+
+`init` keeps what the repo already has:
+
+| Already there | What `init` does |
+|---|---|
+| A file without the `managed by devkit` mark | Keeps it (`--adopt` replaces it) |
+| A CI workflow (`ci`, `test`, `build`… or one that runs checks) | Adds no `ci.yml` and prints the job to add |
+| Husky, pre-commit, simple-git-hooks or another lefthook file | Adds no `lefthook.yml` |
+| Renovate config in another place, `.github/SECURITY.md`… | Adds no second copy |
+| `check`, `lint`, `typecheck` scripts | `check` keeps them and runs `check:knip` last |
+| `knip` in dependencies, a Knip config | Keeps the version and the config |
+| `AGENTS.md` | Adds the shared block and keeps the rest |
+| `CLAUDE.md` with rules, no `AGENTS.md` (as `bun init` writes) | Moves the rules to `AGENTS.md` `## Project`; `CLAUDE.md` becomes `@AGENTS.md` |
+
+A Bun package with `bin` gets `pack: true` on its `ci-bun` job, so CI smoke-tests the packed
+CLI. `sync` adds it the same way, from the repo's own `package.json`. Libraries without `bin`
+get no smoke test.
+
+`init` refuses JS projects on npm, pnpm or yarn before it writes anything. Python projects on
+Poetry, Pipenv or PDM get everything except the uv-based CI stub. With no GitHub remote,
+`SECURITY.md` waits for `--repo owner/name`. Running `init` again changes nothing; after a
+failed `bun install`, running it again finishes the install.
+
+Options: `--dir`, `--dry-run`, `--json`, `--repo owner/name`, `--profile bun|python` (needed
+when both `package.json` and `pyproject.toml` exist), `--adopt`, `--no-install`.
+
+If CI is your own workflow, run `bun run check` in it or call the shared job:
+
+```yaml
+jobs:
+  build:
+    uses: neoromantic/devkit/.github/workflows/ci-bun.yml@v1
+    permissions: { contents: read }
+```
 
 ### CI
 
@@ -56,7 +116,8 @@ jobs:
 
 `ci-bun.yml` inputs: `os` (JSON list, default `["ubuntu-latest"]`), `working-directory`,
 `bun-version` (default: `.bun-version`, then `packageManager` in `package.json`), `canary`, `e2e`.
-Scripts that don't exist are skipped.
+Use `pack: true` to install and run the packed CLI. `pack-args` selects its arguments.
+See [the pack smoke test](docs/standards/pack-smoke.md). Scripts that don't exist are skipped.
 
 Set the repository variable `CI_SELF_HOSTED` to `true` to run `main` Linux builds on
 an isolated runner with the `oss-linux` label. PRs and other branches use GitHub-hosted runners, as do repositories
@@ -228,7 +289,7 @@ Paid offers also follow [paid readiness](docs/standards/paid-readiness.md).
 
 ```sh
 bun install
-bun run check   # tsc --noEmit
+bun run check   # tsc --noEmit, then Knip
 bun run test    # bun test, offline
 actionlint && uvx zizmor --offline .
 ```

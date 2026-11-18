@@ -1,6 +1,6 @@
 {
   "name": "@goodit/devkit",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Shared CI workflows, git hooks, templates and agent rules for neoromantic's open-source repos",
   "license": "MIT",
   "author": "Sergey Petrov",
@@ -24,7 +24,8 @@
     "agents"
   ],
   "scripts": {
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && bun run check:knip",
+    "check:knip": "knip",
     "test": "bun test",
     "privacy-scan": "bun scripts/privacy-scan.ts",
     "sync": "bun scripts/sync.ts",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@types/bun": "1.4.3",
+    "knip": "6.45.1",
     "typescript": "7.0.2"
   }
 }
