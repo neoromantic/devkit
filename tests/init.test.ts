@@ -182,6 +182,15 @@ describe('init: Python', () => {
       expect(actions(dry)).toContain('update bun.lock')
     }))
 
+  test('recognizes a standard-library project from its existing Python workflow', () =>
+    withDir(async (dir) => {
+      const workflow = 'jobs:\n  test:\n    uses: neoromantic/devkit/.github/workflows/ci-python.yml@v1\n'
+      await Bun.write(join(dir, '.github/workflows/ci.yml'), workflow)
+      const run = await init({ dir })
+      expect(run.profile).toBe('python')
+      expect(await Bun.file(join(dir, '.github/workflows/ci.yml')).text()).toBe(workflow)
+    }))
+
   test('a Poetry project keeps its own CI', () =>
     withDir(async (dir) => {
       await Bun.write(join(dir, 'pyproject.toml'), '[project]\nname = "demo"\n[project.urls]\nSource = "https://github.com/someone/demo"\n')
@@ -193,6 +202,15 @@ describe('init: Python', () => {
 })
 
 describe('init: existing project', () => {
+  test('keeps a managed Renovate preset and its project-specific settings', () =>
+    withDir(async (dir) => {
+      await writeJson(join(dir, 'package.json'), { name: 'demo' })
+      const config = { description: 'managed by devkit v1', extends: ['github>neoromantic/devkit//renovate/maintenance'], timezone: 'UTC' }
+      await writeJson(join(dir, 'renovate.json'), config)
+      await init({ dir, install: false })
+      expect(await Bun.file(join(dir, 'renovate.json')).json()).toEqual(config)
+    }))
+
   test('keeps manual CI, other hooks, prior Knip settings, project rules and scripts', () =>
     withDir(async (dir) => {
       await gitRepo(dir)

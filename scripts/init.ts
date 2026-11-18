@@ -159,6 +159,19 @@ async function exists(path: string): Promise<boolean> {
   return (await Bun.file(path).exists()) || (await readdir(path).then(() => true, () => false))
 }
 
+async function usesPythonWorkflow(dir: string): Promise<boolean> {
+  const workflows = join(dir, '.github', 'workflows')
+  const reference = 'neoromantic/devkit/.github/workflows/ci-python.yml@'
+  for (const file of await readdir(workflows).catch(() => [] as string[])) {
+    if (!/\.ya?ml$/.test(file)) continue
+    const contents = await readText(join(workflows, file))
+    if (!contents?.includes(reference)) continue
+    const workflow = Bun.YAML.parse(contents) as { jobs?: Record<string, { uses?: string }> }
+    if (Object.values(workflow.jobs ?? {}).some(job => job.uses?.startsWith(reference))) return true
+  }
+  return false
+}
+
 function detectIndent(text: string): string | number {
   const m = /\n([ \t]+)"/.exec(text)
   return m?.[1] ?? 2
@@ -188,7 +201,8 @@ export async function init(opts: InitOptions): Promise<InitResult> {
   const names = new Set(await readdir(dir))
   const pkgText = names.has('package.json') ? await readText(join(dir, 'package.json')) : null
   const pyText = names.has('pyproject.toml') ? await readText(join(dir, 'pyproject.toml')) : null
-  const profile = opts.profile ?? (pkgText && pyText ? undefined : pkgText ? 'bun' : pyText ? 'python' : undefined)
+  const python = pyText !== null || (!pkgText && await usesPythonWorkflow(dir))
+  const profile = opts.profile ?? (pkgText && python ? undefined : pkgText ? 'bun' : python ? 'python' : undefined)
   if (!profile) {
     throw new Error(
       pkgText && pyText
@@ -197,7 +211,7 @@ export async function init(opts: InitOptions): Promise<InitResult> {
     )
   }
   if (profile === 'bun' && !pkgText) throw new Error('no package.json: run `bun init` first')
-  if (profile === 'python' && !pyText) throw new Error('no pyproject.toml: run `uv init` first')
+  if (profile === 'python' && !python) throw new Error('no pyproject.toml: run `uv init` first')
 
   const pkg = (pkgText ? JSON.parse(pkgText) : {}) as PackageJson
   const pm = profile === 'bun' ? detectPackageManager(pkg, names) : undefined
@@ -221,6 +235,13 @@ export async function init(opts: InitOptions): Promise<InitResult> {
   if (opts.repo && !parseGitHubRepo(opts.repo)) throw new Error(`--repo must be owner/name, got "${opts.repo}"`)
 
   const files = { ...INIT_FILES[profile] }
+  // Fleet sync has the repo's desired Renovate preset. Local init knows only the
+  // existing selection and must preserve it, along with any custom options.
+  const renovate = await readText(join(dir, 'renovate.json'))
+  if (renovate && isManaged(renovate) && !renovate.includes('{{renovate_preset}}')) {
+    delete files['renovate.json']
+    changes.push({ path: 'renovate.json', action: 'ok', note: 'kept existing Renovate settings' })
+  }
   if (!id) {
     delete files['SECURITY.md']
     notes.push('SECURITY.md skipped: no GitHub repo found. Add a git remote or pass --repo owner/name.')

@@ -55,6 +55,9 @@ package (`bun add -d github:neoromantic/devkit#v1`, then `bunx devkit init`).
   baseline, a `check:knip` script, and `check` running it, so `ci-bun` runs Knip through
   `check`. Then `bun install` updates `bun.lock` for `bun install --frozen-lockfile`.
 
+A Python repository that already calls the shared Python workflow can omit `pyproject.toml`.
+Existing Renovate presets and project-specific options are preserved during setup.
+
 The Knip baseline reports unused files, unused `dependencies` and `devDependencies`, unlisted
 imports and unresolved imports. It leaves out unused exports and types, so a library's public
 API is never flagged.
