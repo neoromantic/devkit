@@ -22,7 +22,8 @@ jobs:
     permissions:
       contents: read
     with:
-      os: '["ubuntu-latest","macos-latest"]'
+      # macOS runs after merge, on schedule and on request; a pull request waits only for Linux.
+      os: ${{ github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest"]' }}
       e2e: true
       pack: true
       pack-args: '[["--help"],["status","--help"]]'
@@ -33,16 +34,17 @@ jobs:
       contents: read
     with:
       working-directory: test/fixtures/python
-      python-version: '["3.11","3.12"]'
+      test-with: pytest-xdist
+      test-command: pytest -q -n auto
 
   hygiene:
     uses: ./.github/workflows/hygiene.yml # zizmor: ignore[self-repository] actionlint 1.7.12 rejects the $/ form
     permissions:
       contents: read
 
-  # The pack helper on Windows, against devkit itself. The full suite runs on Linux and macOS only.
+  # The pack helper on Windows, against devkit itself, after merge. The full suite runs on Linux and macOS.
   pack-windows:
-    if: github.event.pull_request.draft != true
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 15
     permissions:
