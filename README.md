@@ -130,6 +130,9 @@ jobs:
     # …fails when any job failed or was cancelled
 ```
 
+The gate needs `actions: read`: GitHub leaves a matrix leg that no runner picked up out of
+`needs`, so the gate also reads the run's jobs from the API.
+
 `ci-bun.yml` inputs: `os` (JSON list, default `["ubuntu-latest"]`), `working-directory`,
 `bun-version` (default: `.bun-version`, then `packageManager` in `package.json`), `canary`, `e2e`.
 Use `pack: true` to install and run the packed CLI. `pack-args` selects its arguments.
