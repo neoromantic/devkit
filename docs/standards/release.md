@@ -3,12 +3,12 @@
 The project's documented procedure defines delivery. Shared tooling does not replace it or
 authorise owner-only steps.
 
-| Delivery | Evidence |
-|---|---|
-| Versioned package or binary | Published release, expected assets and registry version; a tag alone is insufficient |
-| Skill installed from a branch | Verified installable commit SHA |
-| Web service | Production deployment URL and source revision, checked live |
-| Desktop app | Published build and update channel, through the owner's release procedure |
+| Delivery                      | Evidence                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------ |
+| Versioned package or binary   | Published release, expected assets and registry version; a tag alone is insufficient |
+| Skill installed from a branch | Verified installable commit SHA                                                      |
+| Web service                   | Production deployment URL and source revision, checked live                          |
+| Desktop app                   | Published build and update channel, through the owner's release procedure            |
 
 ## Versions
 

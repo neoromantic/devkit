@@ -20,11 +20,11 @@ README.
 
 Checked on Homebrew 7.0.10 (2026-10-19), with an empty trust store:
 
-| Command | Result |
-|---|---|
-| `brew install <name>` after `brew tap`, without trust | refused: "Refusing to load formula neoromantic/tap/<name> from untrusted tap neoromantic/tap" |
-| `brew install neoromantic/tap/<name>` (fully qualified) | works: Homebrew trusts that one formula and installs it |
-| `brew trust --tap neoromantic/tap`, then `brew install <name>` | works |
+| Command                                                        | Result                                                                                        |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `brew install <name>` after `brew tap`, without trust          | refused: "Refusing to load formula neoromantic/tap/<name> from untrusted tap neoromantic/tap" |
+| `brew install neoromantic/tap/<name>` (fully qualified)        | works: Homebrew trusts that one formula and installs it                                       |
+| `brew trust --tap neoromantic/tap`, then `brew install <name>` | works                                                                                         |
 
 The trust step only matters when people install formulae from the tap by short name. Trust lives in
 `~/.homebrew/trust.json` (or `$XDG_CONFIG_HOME/homebrew/trust.json`), and a Brewfile can declare

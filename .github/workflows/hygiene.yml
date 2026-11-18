@@ -35,7 +35,7 @@ on:
       gitleaks-log-opts:
         description: Additional git log options and pathspecs, appended to the commit range
         type: string
-        default: ''
+        default: ""
       boundary-scan:
         description: Run the devkit privacy scan (generic patterns) on added lines
         type: boolean

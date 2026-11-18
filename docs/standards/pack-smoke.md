@@ -21,9 +21,9 @@ jobs:
       pack-args: '[["--help"],["--version"]]'
 ```
 
-| Input | Default | Meaning |
-|---|---|---|
-| `pack` | `false` | Run the pack smoke test |
+| Input       | Default                          | Meaning                                                  |
+| ----------- | -------------------------------- | -------------------------------------------------------- |
+| `pack`      | `false`                          | Run the pack smoke test                                  |
 | `pack-args` | `''`, which means `[["--help"]]` | JSON argv list, or list of argv lists, run for every bin |
 
 Each argv list is passed to the CLI as separate arguments, without a shell. Spaces, quotes and

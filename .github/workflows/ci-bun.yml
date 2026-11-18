@@ -33,7 +33,7 @@ on:
       bun-version:
         description: Bun version. Empty means .bun-version, then packageManager in package.json, then latest
         type: string
-        default: ''
+        default: ""
       canary:
         description: Use Bun canary (for scheduled early-warning runs)
         type: boolean
@@ -49,7 +49,7 @@ on:
       pack-args:
         description: 'JSON argv, or list of argv lists, run for every packed CLI. Empty means [["--help"]]'
         type: string
-        default: ''
+        default: ""
 
 permissions: {}
 

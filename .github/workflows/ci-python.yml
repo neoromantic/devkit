@@ -39,7 +39,7 @@ on:
       test-with:
         description: Extra packages for the test run (space-separated, passed as uv run --with)
         type: string
-        default: ''
+        default: ""
 
 permissions: {}
 
