@@ -81,7 +81,7 @@ release announcements.
 ### Commands
 
 - `bun run format` formats with oxfmt. `bun run check` runs `oxfmt --check`, oxlint,
-  `tsc --noEmit` and Knip; `bun run test` runs `bun test`, offline.
+  `tsc --noEmit` and Knip; `bun run test` runs `bun test --parallel`, offline.
 - `actionlint` and `uvx zizmor --offline .` after any workflow change.
 - `bun scripts/sync.ts` (dry run) before any `--write`; `bun scripts/repo-settings.ts` before `--apply`.
 
