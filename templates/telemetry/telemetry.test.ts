@@ -111,7 +111,7 @@ const keyOf = (r: Received) => {
 };
 
 function captureStderr() {
-  const spy = spyOn(process.stderr, "write").mockImplementation(() => true);
+  const spy = spyOn(process.stderr, "write");
   let lines: string[] = [];
   return {
     lines: () => lines,
@@ -737,6 +737,7 @@ describe("host storage: a BB plugin", () => {
         p.change(choice);
       },
       config: () => Bun.sleep(5),
+      loaded: () => ready,
       shown: async () => {
         await ready;
         await p.config();
@@ -833,9 +834,13 @@ describe("host storage: a BB plugin", () => {
     const p = bbPlugin(dbFile());
     await p.choose("on");
     let resolve = () => {};
-    p.config = () => new Promise<void>((done) => (resolve = done));
+    const configCalled = Promise.withResolvers<void>();
+    p.config = () => {
+      configCalled.resolve();
+      return new Promise<void>((done) => (resolve = done));
+    };
     const pending = p.shown();
-    await Bun.sleep(1);
+    await configCalled.promise;
     resolve();
     p.change("off");
     await pending;
@@ -866,7 +871,7 @@ describe("host storage: a BB plugin", () => {
     await p.choose("on");
     const reinstalled = bbPlugin(file);
     reinstalled.db.run("pragma query_only = on");
-    await Bun.sleep(5);
+    await reinstalled.loaded();
     reinstalled.db.run("pragma query_only = off");
     await reinstalled.shown();
     expect(await sent(reinstalled.telemetry)).toEqual([]);

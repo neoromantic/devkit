@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "..");
@@ -16,17 +16,22 @@ function findPython() {
 const python = findPython();
 if (!python) console.warn("telemetry.py tests skipped: no python3 >= 3.11 on PATH");
 
-test.skipIf(!python)(
-  "telemetry.py passes its unittest suite",
-  () => {
+describe.skipIf(!python)("telemetry.py", () => {
+  let code: number | null = null;
+  let output = "";
+
+  beforeAll(() => {
     const run = Bun.spawnSync(
       [python ?? "python3", "-B", "-m", "unittest", "discover", "-s", "test/telemetry/python"],
       { cwd: root, env: { PATH: process.env.PATH ?? "" }, stdout: "pipe", stderr: "pipe" },
     );
-    const output = run.stderr.toString();
-    if (run.exitCode !== 0) console.error(output);
-    expect(run.exitCode).toBe(0);
+    code = run.exitCode;
+    output = run.stderr.toString();
+  }, 120_000);
+
+  test("passes its unittest suite", () => {
+    if (code !== 0) console.error(output);
+    expect(code).toBe(0);
     expect(output).toMatch(/\nOK/);
-  },
-  120_000,
-);
+  });
+});

@@ -26,17 +26,11 @@ test("telemetry.go renders unchanged and carries the managed mark", async () => 
   expect(isManaged(text.split("\n")[0] ?? "")).toBe(true);
 });
 
+const GOOS = ["linux", "darwin", "windows"];
+
 describe.skipIf(!go)("telemetry.go with the Go toolchain", () => {
   let dir = "";
-
-  beforeAll(async () => {
-    dir = await mkdtemp(join(tmpdir(), "devkit-telemetry-go-"));
-    await copyFile(template, join(dir, "telemetry.go"));
-    for (const name of ["go.mod", "telemetry_test.go"]) {
-      await copyFile(join(root, "test/telemetry/go", name), join(dir, name));
-    }
-  });
-  afterAll(() => rm(dir, { recursive: true, force: true }));
+  const results = new Map<string, { code: number; output: string }>();
 
   function run(cmd: string[], env: Record<string, string> = {}) {
     const p = Bun.spawnSync(cmd, {
@@ -48,28 +42,38 @@ describe.skipIf(!go)("telemetry.go with the Go toolchain", () => {
     return { code: p.exitCode, output: `${p.stdout.toString()}${p.stderr.toString()}`.trim() };
   }
 
-  test("go test", () => {
-    const r = run(["go", "test", "-count=1", "./..."]);
-    expect(r.code, r.output).toBe(0);
-  }, 300_000);
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), "devkit-telemetry-go-"));
+    await copyFile(template, join(dir, "telemetry.go"));
+    for (const name of ["go.mod", "telemetry_test.go"]) {
+      await copyFile(join(root, "test/telemetry/go", name), join(dir, name));
+    }
+    results.set("go test", run(["go", "test", "-count=1", "./..."]));
+    for (const goos of GOOS)
+      results.set(`go vet ${goos}`, run(["go", "vet", "./..."], { GOOS: goos }));
+    results.set("gofmt", run(["gofmt", "-l", "."]));
+    if (staticcheck) results.set("staticcheck", run(["staticcheck", "./..."]));
+  }, 600_000);
+  afterAll(() => rm(dir, { recursive: true, force: true }));
 
-  for (const goos of ["linux", "darwin", "windows"]) {
+  test("go test", () => {
+    const r = results.get("go test");
+    expect(r?.code, r?.output).toBe(0);
+  });
+
+  for (const goos of GOOS) {
     test(`go vet for ${goos}`, () => {
-      const r = run(["go", "vet", "./..."], { GOOS: goos });
-      expect(r.code, r.output).toBe(0);
-    }, 300_000);
+      const r = results.get(`go vet ${goos}`);
+      expect(r?.code, r?.output).toBe(0);
+    });
   }
 
   test("gofmt -l lists nothing", () => {
-    expect(run(["gofmt", "-l", "."])).toEqual({ code: 0, output: "" });
+    expect(results.get("gofmt")).toEqual({ code: 0, output: "" });
   });
 
-  test.skipIf(!staticcheck)(
-    "staticcheck, when installed",
-    () => {
-      const r = run(["staticcheck", "./..."]);
-      expect(r.code, r.output).toBe(0);
-    },
-    300_000,
-  );
+  test.skipIf(!staticcheck)("staticcheck, when installed", () => {
+    const r = results.get("staticcheck");
+    expect(r?.code, r?.output).toBe(0);
+  });
 });

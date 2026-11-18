@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -117,19 +117,26 @@ describe("pack-smoke helper", () => {
     expect(r.exitCode).toBe(0);
   });
 
-  test("dogfoods devkit itself", () => {
-    const r = Bun.spawnSync([process.execPath, SCRIPT, ROOT], {
-      env: {
-        PATH: "/usr/bin:/bin",
-        HOME: process.env.HOME ?? "/nonexistent",
-        TMPDIR: dir,
-        DEVKIT_PACK_ARGS: '[["--help"],["status","--help"]]',
-      },
+  describe("dogfoods devkit itself", () => {
+    let r = { code: 0, out: "", err: "" };
+    beforeAll(() => {
+      const p = Bun.spawnSync([process.execPath, SCRIPT, ROOT], {
+        env: {
+          PATH: "/usr/bin:/bin",
+          HOME: process.env.HOME ?? "/nonexistent",
+          TMPDIR: dir,
+          DEVKIT_PACK_ARGS: '[["--help"],["status","--help"]]',
+        },
+      });
+      r = { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };
+    }, 60_000);
+
+    test("packs devkit and runs its CLI", () => {
+      expect(r.err).toBe("");
+      expect(r.out).toContain("usage: devkit <");
+      expect(r.code).toBe(0);
     });
-    expect(r.stderr.toString()).toBe("");
-    expect(r.stdout.toString()).toContain("usage: devkit <");
-    expect(r.exitCode).toBe(0);
-  }, 60_000);
+  });
 });
 
 describe("pack-smoke units", () => {
