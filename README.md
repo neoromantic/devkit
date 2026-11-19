@@ -355,6 +355,7 @@ bun install
 bun run format  # oxfmt
 bun run check   # oxfmt --check, oxlint, tsc --noEmit, then Knip
 bun run test    # bun test --parallel, offline
+bun run test:integration  # the Go telemetry client against the Go toolchain
 actionlint && uvx zizmor --offline .
 ```
 

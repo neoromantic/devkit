@@ -88,6 +88,8 @@ release announcements.
 
 - `bun run format` formats with oxfmt. `bun run check` runs `oxfmt --check`, oxlint,
   `tsc --noEmit` and Knip; `bun run test` runs `bun test --parallel`, offline.
+  `bun run test:integration` checks the Go telemetry client with the Go toolchain; CI runs it in
+  its own job when the client changes.
 - `actionlint` and `uvx zizmor --offline .` after any workflow change.
 - `bun scripts/sync.ts` (dry run) before any `--write`; `bun scripts/repo-settings.ts` before `--apply`.
 
