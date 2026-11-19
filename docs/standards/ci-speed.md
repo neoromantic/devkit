@@ -61,6 +61,9 @@ plugin:
 - One key per job, built from everything that changes the contents: the lockfile hash, the
   runtime version and the OS. Never a cache that one job writes and another reads with different
   contents.
+- In a workspace, the task runner caches test results by the package's inputs and those of its
+  dependencies, so a change to a dependency still reruns the tests. A package whose tests read
+  files outside it turns the cache off for its own tests.
 - A slow step is not always a miss. A step that installs and then runs `check` is as slow as its
   type check; a self-hosted runner downloads a toolchain once and finds it in its tool cache on
   later runs.
