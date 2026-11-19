@@ -161,8 +161,9 @@ temp files stay out of `/tmp`; on the `oss-linux` runners that dir is tmpfs and 
 On `oss-linux`, `hygiene` also installs its Bun there, so it never replaces the shared
 `~/.bun/bin/bun` that a `ci-bun` job may still be running.
 
-Self-hosted Python jobs retain uv downloads in `runner.tool_cache/uv-cache`; GitHub-hosted
-Python jobs use the Actions cache. With `persistent-venv: true`, a self-hosted Python job also
+Self-hosted Python jobs retain uv downloads in `runner.tool_cache/uv-cache`. GitHub-hosted jobs
+download uv packages and Bun each run: an Actions cache of them cost more to save and restore
+than the download it saved. With `persistent-venv: true`, a self-hosted Python job also
 keeps its virtualenv in the tool cache between runs; `uv sync` still makes it match the lockfile. Repo-owned jobs keep their own cache settings.
 Native macOS/Windows checks, Homebrew jobs and publishing workflows can remain
 GitHub-hosted; the Linux opt-in does not move those jobs.

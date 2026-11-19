@@ -87,7 +87,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           working-directory: ${{ inputs.working-directory }}
-          enable-cache: ${{ runner.environment != 'self-hosted' }}
+          enable-cache: false
           cache-local-path: ${{ runner.tool_cache }}/uv-cache
 
       - name: Keep the virtualenv in the tool cache
