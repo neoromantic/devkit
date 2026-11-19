@@ -106,7 +106,9 @@ the database as a parameter.
   model or a filled cache, fails when it is a worker's first test. Load it in a session-scoped
   fixture or `beforeAll` that the test uses; never raise the test's timeout.
 - Go runs packages in parallel processes. Tests inside a package run one at a time unless they
-  call `t.Parallel()`, which `t.Setenv` and `t.Chdir` refuse.
+  call `t.Parallel()`, which `t.Setenv` and `t.Chdir` refuse; CPU-bound tests, such as sweeps
+  over many inputs, call it. Under `-race`, set `GORACE=atexit_sleep_ms=0`: otherwise every test
+  binary, and every copy of it a test runs as a fake command, sleeps a second as it exits.
 - Workers share the CPU, so a test that runs a heavy tool in its body, such as a compiler or a
   linter, slows down under them and can hit the test timeout. Run the tool once in `beforeAll`
   with its time budget and assert the result in the tests.
