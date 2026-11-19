@@ -65,6 +65,45 @@ jobs:
           DEVKIT_PACK_ARGS: '[["--help"],["status","--help"]]'
         run: bun scripts/pack-smoke.ts .
 
+  # The Go usage telemetry client: go test, go vet for each OS and gofmt. On a pull request it runs
+  # only when the diff touches what it reads. GitHub-hosted everywhere, so main's Go build cache
+  # seeds pull request runs.
+  telemetry-go:
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Files this job reads
+        id: changes
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')"
+          grep -qE '^(templates/telemetry/telemetry\.go|test/telemetry/go/.*|test/telemetry-go\.integration\.test\.ts|scripts/lib/managed\.ts|package\.json|\.github/workflows/self\.yml)$' <<< "$files" ||
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+      - if: steps.changes.outputs.skip != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: steps.changes.outputs.skip != 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: test/telemetry/go/go.mod
+          cache-dependency-path: test/telemetry/go/go.mod
+      - if: steps.changes.outputs.skip != 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+          no-cache: true
+      - name: Test
+        if: steps.changes.outputs.skip != 'true'
+        run: bun run test:integration
+
   templates:
     if: github.event.pull_request.draft != true
     runs-on: ${{ fromJSON('{"true":"oss-linux","false":"ubuntu-latest"}')[format('{0}', vars.CI_SELF_HOSTED == 'true' && github.ref == 'refs/heads/main')] }}
@@ -98,7 +137,7 @@ jobs:
 
   # The one required check for the branch ruleset.
   ci:
-    needs: [bun, python-fixture, hygiene, pack-windows, templates]
+    needs: [bun, python-fixture, hygiene, pack-windows, telemetry-go, templates]
     if: always() && github.event.pull_request.draft != true
     runs-on: ${{ fromJSON('{"true":"oss-linux","false":"ubuntu-latest"}')[format('{0}', vars.CI_SELF_HOSTED == 'true' && github.ref == 'refs/heads/main')] }}
     permissions:
