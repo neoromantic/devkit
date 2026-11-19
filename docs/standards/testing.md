@@ -68,6 +68,9 @@ the database as a parameter.
   `Date.now` or `setTimeout`.
 - Await the operation itself, or a deferred from `Promise.withResolvers()`. Latency inside a
   fake or a local test server is also a deferred the test resolves, never a sleep.
+- To prove that an operation is blocked, a spy on the lock acquire calls through and signals
+  when it finds the lock held; then the test asserts the operation has not finished. Never wait
+  for a short timeout to expire.
 - No fixed sleeps, retries or raised timeouts, and no `setDefaultTimeout`. Split CPU-bound
   sweeps with `test.each`, and run slow shared setup once in `beforeAll`. `--retry` and
   `--rerun-each` never go in scripts; a suite-wide `--timeout` is allowed only in a dedicated
@@ -137,8 +140,11 @@ A repo-wide test cleanup, one subsystem at a time. Hand this section to whoever 
 7. Run the suite in parallel workers as you go and fix the shared state you meet.
 8. One narrow pull request per subsystem. Its description summarises the ledger: contracts,
    owners, what went and why.
-9. At the end, report the test step's time, the number of tests and the lines of test code
-   before and after, with run links.
+9. When several subsystems are cleaned up in parallel, two branches can each delete their copy
+   of a test as covered by the other's. Before merging, put the branches together, check that
+   every owner a removal names still exists, and break a few behaviours on the merged tree.
+10. At the end, report the test step's time, the number of tests and the lines of test code
+    before and after, with run links.
 
 ## Running checks
 
