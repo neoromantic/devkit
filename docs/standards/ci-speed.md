@@ -61,6 +61,12 @@ plugin:
 - One key per job, built from everything that changes the contents: the lockfile hash, the
   runtime version and the OS. Never a cache that one job writes and another reads with different
   contents.
+- Go: `actions/setup-go` with `cache: false`, and an `actions/cache` restore and save per job,
+  keyed `go-<job>-<os>-<go version>-<go.sum hash>-<sha>` and restored by the key without the
+  sha. It saves on pushes and on a pull request run that restored nothing. `go test` reuses a
+  result only when the files it read keep their mtime, so a step after checkout sets each file's
+  mtime to its last commit time. Build cache entries hold absolute paths, so a self-hosted
+  runner's cache can't seed GitHub-hosted runs.
 - In a workspace, the task runner caches test results by the package's inputs and those of its
   dependencies, so a change to a dependency still reruns the tests. A package whose tests read
   files outside it turns the cache off for its own tests.
