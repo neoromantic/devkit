@@ -150,7 +150,10 @@ shared lint standard gets Node 24 when the runner's is older than 22.18.
 
 Set the repository variable `CI_SELF_HOSTED` to `true` to run `main` Linux builds on
 an isolated runner with the `oss-linux` label. PRs and other branches use GitHub-hosted runners, as do repositories
-without the variable. Native macOS and Windows jobs keep their selected OS. An explicit
+without the variable. The opt-in has a cost: a shared runner can be slower than a GitHub-hosted
+one, and the caches it keeps never reach pull requests, which read only the Actions caches of
+their own branch and the base branch (see
+[the CI speed standard](docs/standards/ci-speed.md#caches)). Native macOS and Windows jobs keep their selected OS. An explicit
 non-default `hygiene.runner` also stays unchanged. Draft PRs skip work; marking them ready
 starts CI, and newer commits cancel superseded checks. Pushes to `main` are never cancelled:
 each one keeps its run, so every pushed range gets its secret scan. The CI stubs also run
