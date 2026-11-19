@@ -102,6 +102,9 @@ the database as a parameter.
 - pytest-xdist workers are separate processes: a session-scoped fixture runs once per worker.
   Work that must happen once per run, such as a build, runs before pytest. Debug one test
   serially with `-n 0`.
+- A test that relies on a warm-up an earlier test did in the same process, such as a loaded
+  model or a filled cache, fails when it is a worker's first test. Load it in a session-scoped
+  fixture or `beforeAll` that the test uses; never raise the test's timeout.
 - Go runs packages in parallel processes. Tests inside a package run one at a time unless they
   call `t.Parallel()`, which `t.Setenv` and `t.Chdir` refuse.
 - Workers share the CPU, so a test that runs a heavy tool in its body, such as a compiler or a
